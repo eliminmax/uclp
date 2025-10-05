@@ -172,20 +172,25 @@ int main(int argc, char *argv[]) {
 
     void *foreign_funcs = NULL;
 
-    size_t offset = var_offset + header.var_size;
-    if (offset & 0xfff) {
-        if (offset > (SSIZE_MAX - 0x1000)) {
-            fprintf(stderr, "Code offset %zu too large\n", offset);
+    size_t code_page_start = var_page_start + var_offset + header.var_size;
+    if (code_page_start & 0xfff) {
+        if (code_page_start > (SSIZE_MAX - 0x1000)) {
+            fprintf(stderr, "Code offset %zu too large\n", code_page_start);
             goto err_after_opening;
         }
-        offset &= ~0xfff;
-        offset += 0x1000;
+        code_page_start &= ~0xfff;
+        code_page_start += 0x1000;
     }
 
     void *code = mmap(
-        NULL, header.code_size, PROT_READ | PROT_EXEC, MAP_PRIVATE, fd, offset
+        NULL,
+        header.code_size,
+        PROT_READ | PROT_EXEC,
+        MAP_PRIVATE,
+        fd,
+        code_page_start
     );
-    if (variables == MAP_FAILED) {
+    if (code == MAP_FAILED) {
         perror("Failed to mmap code segment");
         goto err_after_opening;
     }
