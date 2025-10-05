@@ -2,7 +2,9 @@
  * SPDX-FileCopyrightText: 2025 Eli Array Minkoff
  *
  * SPDX-License-Identifier: GPL-3.0-only
- */
+ *
+ * A relatively simple loader program that sets up and runs the binaries
+ * */
 
 #include <fcntl.h>
 #include <inttypes.h>
@@ -16,18 +18,38 @@
 #ifndef __GNUC__
 #error "Requires GNU C extensions"
 #endif
+#ifndef __x86_64__
+#error "Only works on x86_64"
+#endif
+#if __STDC_VERSION__ < 202311L
+#error "C23 required"
+#endif
 
 [[gnu::naked]]
 static void run(void *vars, void *foreign_funcs, void *start) {
-    asm("push %rbx\npush %rbp\n" // save callee-saved registers
-        "mov %rbx, %rdi\n" // move the vars address into rbx
-        "mov %rbp, %rsi\n" // move the foreign_funcs address into rsi
-        "call *%rdx\n" // jump to the start address
-        "pop %rbx\npop %rbp\n" // restore callee-saved registers
-        "ret\n");
+    asm(
+        // save callee-saved registers
+        "push %rbx\n"
+        "push %rbp\n"
+        // move the vars address into rbx
+        "mov %rbx, %rdi\n"
+        // move the foreign_funcs address into rsi
+        "mov %rbp, %rsi\n"
+        // jump to the start address
+        "call *%rdx\n"
+        // restore callee-saved registers
+        "pop %rbx\n"
+        "pop %rbp\n"
+        // return
+        "ret\n"
+    );
 }
 
 int main(int argc, char *argv[]) {
+    // SSIZE_MAX is defined, but OFF_MAX isn't, so make sure they're the same
+    // size types so that SSIZE_MAX can be used for off_t overflow checks
+    static_assert(sizeof(off_t) == sizeof(ssize_t));
+
     if (argc <= 1) {
         fputs("Error: No file provided\n", stderr);
         return EXIT_FAILURE;
@@ -51,9 +73,10 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    union header {
+    union {
         char bytes[32];
-        struct __attribute__((aligned(8), packed)) {
+
+        struct [[gnu::packed]] [[gnu::aligned(8)]] {
             char magic[4];
             uint8_t version;
             uint8_t num_ffi_handles;
@@ -91,25 +114,9 @@ int main(int argc, char *argv[]) {
         fputs("FFI not yet implemented.\n", stderr);
         goto err_after_opening;
     }
-
-    if (header.ffi_size != 0) {
-        fputs("FFI not yet implemented.\n", stderr);
-        goto err_after_opening;
-    }
-
-    if (header.ffi_size != 0) {
-        fputs("Variable Segment not yet implemented.\n", stderr);
-        goto err_after_opening;
-    }
-
-    if (header.code_size == 0) {
-        fputs("Code segment can't be empty.\n", stderr);
-        goto err_after_opening;
-    }
-
     uint64_t var_offset = 32 + header.ffi_size + header.var_size;
     if (var_offset > SSIZE_MAX) {
-        fputs("Variable offset higher than SSIZE_MAX.\n", stderr);
+        fputs("Variable offset too large.\n", stderr);
         goto err_after_opening;
     }
 
@@ -129,10 +136,36 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // TODO: FFI logic
+
+    if (header.ffi_size != 0) {
+        fputs("FFI not yet implemented.\n", stderr);
+        goto err_after_opening;
+    }
+
+    if (header.ffi_size != 0) {
+        fputs("Variable Segment not yet implemented.\n", stderr);
+        goto err_after_opening;
+    }
+
+    if (header.code_size > SIZE_MAX) {
+        fputs("Code segment too large to load\n", stderr);
+        goto err_after_opening;
+    }
+
+    if (header.code_size == 0) {
+        fputs("Code segment can't be empty.\n", stderr);
+        goto err_after_opening;
+    }
+
     void *foreign_funcs = NULL;
 
     size_t offset = var_offset + header.var_size;
     if (offset & 0xfff) {
+        if (offset > (SSIZE_MAX - 0x1000)) {
+            fprintf(stderr, "Code offset %zu too large\n", offset);
+            goto err_after_opening;
+        }
         offset &= ~0xfff;
         offset += 0x1000;
     }
@@ -146,6 +179,7 @@ int main(int argc, char *argv[]) {
     }
 
     close(fd);
+
     run(variables, foreign_funcs, code);
     return EXIT_SUCCESS;
 
