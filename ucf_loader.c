@@ -25,6 +25,7 @@
 #error "C23 required"
 #endif
 
+[[gnu::sysv_abi]]
 [[gnu::naked]]
 static void run(void *vars, void *foreign_funcs, void *start) {
     asm(
