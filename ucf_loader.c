@@ -32,9 +32,9 @@ static void run(void *vars, void *foreign_funcs, void *start) {
         "push %rbx\n"
         "push %rbp\n"
         // move the vars address into rbx
-        "mov %rbx, %rdi\n"
+        "mov %rdi, %rbx\n"
         // move the foreign_funcs address into rsi
-        "mov %rbp, %rsi\n"
+        "mov %rsi, %rbp\n"
         // jump to the start address
         "call *%rdx\n"
         // restore callee-saved registers
