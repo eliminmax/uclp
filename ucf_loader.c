@@ -6,6 +6,7 @@
  * A relatively simple loader program that sets up and runs the binaries
  * */
 
+#include <assert.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -115,13 +116,22 @@ int main(int argc, char *argv[]) {
         fputs("FFI not yet implemented.\n", stderr);
         goto err_after_opening;
     }
-    uint64_t var_offset = 32 + header.ffi_size + header.var_size;
-    if (var_offset > SSIZE_MAX) {
+
+    if (header.ffi_size + 32 > SSIZE_MAX) {
         fputs("Variable offset too large.\n", stderr);
         goto err_after_opening;
     }
 
+    off_t var_page_start = 32 + header.ffi_size;
+    off_t var_offset = var_page_start & 0xfff;
+    var_page_start &= ~0xfff;
+
+    // make sure that there won't be alignment issues with variable start
+    // address
+    assert((var_offset & 0b111) == 0);
+
     void *variables = NULL;
+
     if (header.var_size) {
         variables = mmap(
             NULL,
@@ -129,12 +139,13 @@ int main(int argc, char *argv[]) {
             PROT_READ | PROT_WRITE,
             MAP_PRIVATE,
             fd,
-            (var_offset & 0xfff) ? ((var_offset & ~0xfff) + 0x1000) : var_offset
+            var_page_start
         );
         if (variables == MAP_FAILED) {
             perror("Failed to mmap variables segment");
             goto err_after_opening;
         }
+        variables = ((char *)variables) + var_offset;
     }
 
     // TODO: FFI logic
