@@ -25,9 +25,9 @@ I have very little idea what I'm doing, but my previous favorite projects have o
 ### Binary Format Goals
 
 * [ ] Uses a small subset of `x86_64` machine code as the encoded instruction format.
-* [ ] Simple header format, declaring the following:
+* [x] Simple header format, declaring the following:
  * [x] Entry point
- * [ ] Information needed for the loader or interpreter to properly call `dlopen` and `dlsym`
+ * [x] Information needed for the loader or interpreter to properly call `dlopen` and `dlsym`
  * [x] Size of variable section
 * [x] a loader program that can `mmap` the code and call it using inline assembly
 
