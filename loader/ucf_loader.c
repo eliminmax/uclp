@@ -52,7 +52,7 @@ static void run(
 
 // validate that the environment
 static bool validate_environment(int argc, char *argv[]) {
-    // POSIX requires this, but ISO C doesn't so double-check
+    // POSIX requires this, but ISO C doesn't, so double-check
     static_assert(CHAR_BIT == 8, "8-bit char support required");
 
     // SSIZE_MAX is defined, but OFF_MAX isn't, so make sure they're the same
