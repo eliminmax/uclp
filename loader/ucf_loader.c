@@ -20,16 +20,6 @@
 #include "platform_check.h"
 #include "header_structs.h"
 
-#ifndef __GNUC__
-#error "Requires GNU C extensions"
-#endif
-#ifndef __x86_64__
-#error "Only works on x86_64"
-#endif
-#if __STDC_VERSION__ < 202311L
-#error "C23 required"
-#endif
-
 #if !__has_c_attribute(gnu::sysv_abi)
 #error "Missing required GNU function attribute sysv_abi"
 #endif
