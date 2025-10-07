@@ -14,4 +14,6 @@ CompileFlags:
     # Warn on reserved identifiers
     - "-Wreserved-identifier"
     - "-Wreserved-macro-identifier"
+    # include the repo-level include dir
+    - "-I./include"
   Compiler: clang

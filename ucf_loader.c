@@ -16,6 +16,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include "header_structs.h"
+
 #ifndef __GNUC__
 #error "Requires GNU C extensions"
 #endif
@@ -26,8 +28,7 @@
 #error "C23 required"
 #endif
 
-[[gnu::sysv_abi]]
-[[gnu::naked]]
+[[gnu::sysv_abi]] [[gnu::naked]]
 static void run(void *vars, void *foreign_funcs, void *start) {
     asm(
         // save callee-saved registers
@@ -78,18 +79,11 @@ int main(int argc, char *argv[]) {
     union {
         char bytes[32];
 
-        struct [[gnu::packed]] [[gnu::aligned(8)]] {
-            char magic[4];
-            uint8_t version;
-            uint8_t num_ffi_handles;
-            uint16_t num_ffi_funcs;
-            uint64_t ffi_size;
-            uint64_t var_size;
-            uint64_t code_size;
-        };
-    } header;
+        Header header;
+    } header_reader;
 
-    ssize_t read_count = read(fd, header.bytes, 32);
+#define header (header_reader.header)
+    ssize_t read_count = read(fd, header_reader.bytes, 32);
 
     if (read_count != 32) {
         fputs("Failed to read header from file.\n", stderr);
@@ -203,4 +197,5 @@ int main(int argc, char *argv[]) {
 err_after_opening:
     close(fd);
     return EXIT_FAILURE;
+#undef header
 }
