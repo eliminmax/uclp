@@ -43,8 +43,8 @@ static void run(
         // jump to the start address
         "call *%rdx\n"
         // restore callee-saved registers
-        "pop %rbx\n"
         "pop %rbp\n"
+        "pop %rbx\n"
         // return
         "ret\n"
     );
