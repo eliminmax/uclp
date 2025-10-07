@@ -42,7 +42,7 @@
 static void run(
     const void *vars, const void *foreign_funcs, const void *start
 ) {
-    asm(
+    __asm__(
         // save callee-saved registers
         "push %rbx\n"
         "push %rbp\n"
