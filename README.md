@@ -10,6 +10,8 @@ I have decided to create my own language that compiles to a custom binary execut
 
 I have very little idea what I'm doing, but my previous favorite projects have often started out that way, and have given me a little knowledge to start with - enough to be dangerous.
 
+ALL INFORMATION IN THIS DOCUMENT IS PROVISIONAL AND SUBJECT TO CHANGE. THIS REPO CONTAINS A HOBBY PROJECT THAT SHOULD NOT BE USED FOR ANYTHING IMPORTANT!
+
 ## Goals and Non-Goals
 
 ### Language Goals
