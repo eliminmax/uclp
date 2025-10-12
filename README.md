@@ -43,7 +43,6 @@ ALL INFORMATION IN THIS DOCUMENT IS PROVISIONAL AND SUBJECT TO CHANGE. THIS REPO
 
 * Support for floating point types, classes, structs, or advanced types
 * Dynamic allocation
-* Proper call stack - all data is static
 * Efficient codegen
 * Macro support
 * Fast compile times

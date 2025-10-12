@@ -33,15 +33,15 @@ static void run(void *vars, const void *foreign_funcs, const void *start) {
     __asm__(
         // save callee-saved registers
         "push %rbx\n"
-        "push %rbp\n"
-        // move the vars address into rbx
-        "mov %rdi, %rbx\n"
-        // move the foreign_funcs address into rsi
-        "mov %rsi, %rbp\n"
+        "push %r12\n"
+        // move the vars address into r12
+        "mov %rdi, %r12\n"
+        // move the foreign_funcs address into rbx
+        "mov %rsi, %rbx\n"
         // jump to the start address
         "call *%rdx\n"
         // restore callee-saved registers
-        "pop %rbp\n"
+        "pop %r12\n"
         "pop %rbx\n"
         // return
         "ret\n"
