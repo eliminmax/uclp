@@ -34,10 +34,10 @@ static void run(void *vars, const void *foreign_funcs, const void *start) {
         // save callee-saved registers
         "push %rbx\n"
         "push %r12\n"
-        // move the vars address into r12
-        "mov %rdi, %r12\n"
-        // move the foreign_funcs address into rbx
-        "mov %rsi, %rbx\n"
+        // move the vars address into rbx
+        "mov %rdi, %rbx\n"
+        // move the foreign_funcs address into r12
+        "mov %rsi, %r12\n"
         // jump to the start address
         "call *%rdx\n"
         // restore callee-saved registers

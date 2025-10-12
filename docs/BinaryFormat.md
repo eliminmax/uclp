@@ -74,6 +74,6 @@ Then, after 4064 padding bytes, it would have the following:
 
 ## Loader
 
-The loader program first parses and validates the header and runtime environment. If successful, it places a pointer to the array of foreign function addresses in the `RBP` register, and the address of the variable segment start in the `RBX` register, then passes control into the code segment using the x86 `call` instruction. If the validation or setup fail, it prints an error and returns exit code 1; If the code segment returns, it returns exit code 0, but the code segment itself might not return.
+The loader program first parses and validates the header and runtime environment. If successful, it places a pointer to the array of foreign function addresses in the `R12` register, and the address of the variable segment start in the `RBX` register, then passes control into the code segment using the x86 `call` instruction. If the validation or setup fail, it prints an error and returns exit code 1; If the code segment returns, it returns exit code 0, but the code segment itself might not return.
 
-Registers other than `RBP` and `RBX` have unspecified starting values.
+Registers other than `R12` and `RBX` have unspecified starting values.
