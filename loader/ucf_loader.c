@@ -29,9 +29,7 @@
 #endif
 
 [[gnu::sysv_abi]] [[gnu::naked]]
-static void run(
-    const void *vars, const void *foreign_funcs, const void *start
-) {
+static void run(void *vars, const void *foreign_funcs, const void *start) {
     __asm__(
         // save callee-saved registers
         "push %rbx\n"
