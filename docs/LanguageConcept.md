@@ -208,7 +208,6 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 | Arithmetic Shift Right    | `a @>> b` |
 | Arithmetic Shift Left     | `a @<< b` |
 
-
 ### Specific Operations
 
 #### Logical Not
@@ -255,7 +254,6 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 #### Subtraction
 
 `a - b` evaluates to the difference between `a` and `b`.
-
 
 #### Unsigned Multiplication
 
