@@ -15,6 +15,8 @@
     * [Function Declarations](#function-declarations)
     * [Conditionals](#conditionals)
     * [While Loop](#while-loop)
+* [Integer Operations](#integer-operations)
+    * [Overview and Syntax](#overview-and-syntax)
 
 <!-- vim-markdown-toc -->
 
@@ -151,3 +153,45 @@ while CONDITION {
     // ...
 }
 ```
+
+## Integer Operations
+
+There are the normal unary and binary operations that most languages have, as well as downcasts to shrink integers to a smaller size, as well as sign extensions and zero extensions to grow them.
+
+By default, operations are assumed to follow unsigned semantics. For operations where unsigned and signed semantics differ, a signed variant exists, using the `@` sign at the start of the operator
+
+### Overview and Syntax
+
+| Operation                 | Syntax    |
+|---------------------------|-----------|
+| Logical Not               | `!a`      |
+| Bitwise Not               | `~a`      |
+| Negation                  | `-a`      |
+| Unsigned Cast to N Bits   | `:[N]a`   |
+| Signed Cast to N Bits     | `@:[N]a`  |
+| Addition                  | `a + b`   |
+| Subtraction               | `a - b`   |
+| Unsigned Multiplication   | `a * b`   |
+| Unsigned Division         | `a / b`   |
+| Unsigned Modulo           | `a % b`   |
+| Signed Multiplication     | `a @* b`  |
+| Signed Division           | `a @/ b`  |
+| Signed Modulo             | `a @% b`  |
+| Equal                     | `a == b`  |
+| Not Equal                 | `a != b`  |
+| Unsigned Less Than        | `a < b`   |
+| Unsigned Greater Than     | `a > b`   |
+| Unsigned Less or Equal    | `a <= b`  |
+| Unsigned Greater or Equal | `a >= b`  |
+| Signed Less Than          | `a @< b`  |
+| Signed Greater Than       | `a @> b`  |
+| Signed Less or Equal      | `a @<= b` |
+| Signed Greater or Equal   | `a @>= b` |
+| Bitwise And               | `a & b`   |
+| Bitwise Or                | `a \| b`  |
+| Bitwise Xor               | `a ^ b`   |
+| Logical Shift Right       | `a >> b`  |
+| Logical Shift Left        | `a << b`  |
+| Arithmetic Shift Right    | `a @>> b` |
+| Arithmetic Shift Left     | `a @<< b` |
+
