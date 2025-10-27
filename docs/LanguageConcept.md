@@ -10,6 +10,7 @@
 * [Program Structure + Control Flow](#program-structure--control-flow)
 * [Syntax](#syntax)
     * [Comments](#comments)
+    * [Integer Literals](#integer-literals)
     * [Variable Declarations](#variable-declarations)
     * [Function Declarations](#function-declarations)
     * [Conditionals](#conditionals)
@@ -63,6 +64,16 @@ I'm thinking of a minimal syntnax. My main programming languages of choice these
 ### Comments
 
 Comments can either start with `//` and go to the end of the line, or start with `/*` and go until `*/`
+
+### Integer Literals
+
+Integer literals have up to 3 components - the (optional) base modifier prefix, the value, and the (optional) type suffix. There is no whitespace within them.
+
+If no base modifier prefix is present, then the integer value is written in decimal. The base modifiers supported are `0x` for hexadecimal, `0b` for binary, or `0o` for octal.
+
+If a single underscore (`_`) appears between digits, it's ignored, as a digit separator.
+
+The type suffix is one of `#8`, `#16`, `#32`, or `#64`, for 8-bit, 16-bit, 32-bit, or 64-bit integers. If not specified, 32-bit is assumed.
 
 ### Variable Declarations
 
