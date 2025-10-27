@@ -29,6 +29,27 @@
         * [Addition](#addition)
         * [Subtraction](#subtraction)
         * [Unsigned Multiplication](#unsigned-multiplication)
+        * [Unsigned Division](#unsigned-division)
+        * [Unsigned Modulo](#unsigned-modulo)
+        * [Signed Multiplication](#signed-multiplication)
+        * [Signed Division](#signed-division)
+        * [Signed Modulo](#signed-modulo)
+        * [Equal](#equal)
+        * [Not Equal](#not-equal)
+        * [Unsigned Less Than](#unsigned-less-than)
+        * [Unsigned Greater Than](#unsigned-greater-than)
+        * [Unsigned Less or Equal](#unsigned-less-or-equal)
+        * [Unsigned Greater or Equal](#unsigned-greater-or-equal)
+        * [Signed Less Than](#signed-less-than)
+        * [Signed Greater Than](#signed-greater-than)
+        * [Signed Less or Equal](#signed-less-or-equal)
+        * [Signed Greater or Equal](#signed-greater-or-equal)
+        * [Bitwise And](#bitwise-and)
+        * [Bitwise Or](#bitwise-or)
+        * [Bitwise Xor](#bitwise-xor)
+        * [Logical Shift Right](#logical-shift-right)
+        * [Arithmetic Shift Right](#arithmetic-shift-right)
+        * [Shift Left](#shift-left)
 
 <!-- vim-markdown-toc -->
 
@@ -257,3 +278,87 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 #### Unsigned Multiplication
 
 `a * b` evaluates to the product of `a` and `b`, treating both as unsigned values.
+
+#### Unsigned Division
+
+`a / b` evaluates to the quotient of `a` divided by `b`, treating both as unsigned values.
+
+#### Unsigned Modulo
+
+`a % b` evaluates to the remainder of `a` divided by `b`, treating both as unsigned values.
+
+#### Signed Multiplication
+
+`a * b` evaluates to the product of `a` and `b`, treating both as unsigned values.
+
+#### Signed Division
+
+`a / b` evaluates to the quotient of `a` divided by `b`, treating both as unsigned values.
+
+#### Signed Modulo
+
+`a % b` evaluates to the remainder of `a` divided by `b`, treating both as unsigned values.
+
+#### Equal
+
+`a == b` evaluates to 1 if `a` and `b` are equal, and 0 otherwise.
+
+#### Not Equal
+
+`a != b` evaluates to 0 if `a` and `b` are equal, and 1 otherwise.
+
+#### Unsigned Less Than
+
+`a < b` evaluates to 0 if `a` is less than `b`, treating `a` and `b` as unsigned values.
+
+#### Unsigned Greater Than
+
+`a > b` evaluates to 0 if `a` is greater than `b`, treating `a` and `b` as unsigned values.
+
+#### Unsigned Less or Equal
+
+`a < b` evaluates to 0 if `a` is less than or equal to `b`, treating `a` and `b` as unsigned values.
+
+#### Unsigned Greater or Equal
+
+`a > b` evaluates to 0 if `a` is greater than or equal to `b`, treating `a` and `b` as unsigned values.
+
+#### Signed Less Than
+
+`a < b` evaluates to 0 if `a` is less than `b`, treating `a` and `b` as signed values.
+
+#### Signed Greater Than
+
+`a > b` evaluates to 0 if `a` is greater than `b`, treating `a` and `b` as signed values.
+
+#### Signed Less or Equal
+
+`a < b` evaluates to 0 if `a` is less than or equal to `b`, treating `a` and `b` as signed values.
+
+#### Signed Greater or Equal
+
+`a > b` evaluates to 0 if `a` is greater than or equal to `b`, treating `a` and `b` as signed values.
+
+#### Bitwise And
+
+`a & b` evaluates to the value produced by going bit by bit, setting the bit to 1 if the equivalent bits in `a` and `b` are 1, and 0 otherwise.
+
+#### Bitwise Or
+
+`a | b` evaluates to the value produced by going bit by bit, setting the bit to 0 if the equivalent bits in `a` and `b` are 0, and 1 otherwise.
+
+#### Bitwise Xor
+
+`a ^ b` evaluates to the value produced by going bit by bit, setting the bit to 1 if exactly 1 of the equivalent bits in `a` and `b` is 1, and 0 otherwise.
+
+#### Logical Shift Right
+
+`a >> b` moves the bits of `a` `b` spaces over to the right, dropping the lowest `b` bits, and filling the highest `b` bits with 0.
+
+#### Arithmetic Shift Right
+
+`a >> b` moves the bits of `a` `b` spaces over to the right, dropping the lowest `b` bits, and filling the highest `b` bits with the highest bit of `a`.
+
+#### Shift Left
+
+`a << b` moves the bits of `a` `b` spaces over to the right, dropping the highest `b` bits, and filling the lowest `b` bits with 0.
