@@ -19,7 +19,7 @@
 
 UCLP is intended to be a limited language that's easy to compile, not a particularly robust or expressive language.
 
-At time of writing this, the loader program for the binary format is working, but the language itself is just a vague idea. This document aims to be a place where I can narrow down the syntax and semantics.
+When I started writing this, I had gotten the loader program for the binary format working, but the language itself was just a vague idea. This document was intended to be a place where I could flesh out the syntax and semantics, until I had the language figured out.
 
 ## Type System
 
