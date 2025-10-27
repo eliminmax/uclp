@@ -204,9 +204,8 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 | Bitwise Or                | `a \| b`  |
 | Bitwise Xor               | `a ^ b`   |
 | Logical Shift Right       | `a >> b`  |
-| Logical Shift Left        | `a << b`  |
 | Arithmetic Shift Right    | `a @>> b` |
-| Arithmetic Shift Left     | `a @<< b` |
+| Shift Left                | `a << b`  |
 
 ### Specific Operations
 
