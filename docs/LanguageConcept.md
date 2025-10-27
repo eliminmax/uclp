@@ -91,11 +91,12 @@ The type suffix is one of `#8`, `#16`, `#32`, or `#64`, for 8-bit, 16-bit, 32-bi
 
 ### Variable Declarations
 
-Variables are declared with the following format:
+Variables are declared with the following formats:
 
 ```uclp
-let $NAME: $TYPE;
-let NAME: TYPE = DEFAULT_VALUE;
+let NAME: TYPE;
+let NAME = VALUE;
+let NAME: TYPE = VALUE;
 ```
 
 ### Function Declarations
