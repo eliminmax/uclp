@@ -6,6 +6,14 @@
  * A relatively simple loader program that sets up and runs the binaries
  * */
 
+#ifndef __x86_64__
+#error "Only works on x86_64"
+#endif
+#if __STDC_VERSION__ < 202311L
+#error "C23 additions required"
+#endif
+
+
 #include <assert.h>
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -17,7 +25,6 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#include "platform_check.h"
 #include "header_structs.h"
 
 #if !__has_c_attribute(gnu::sysv_abi)
