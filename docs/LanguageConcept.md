@@ -17,6 +17,18 @@
     * [While Loop](#while-loop)
 * [Integer Operations](#integer-operations)
     * [Overview and Syntax](#overview-and-syntax)
+    * [Specific Operations](#specific-operations)
+        * [Logical Not](#logical-not)
+        * [Bitwise Not](#bitwise-not)
+            * [Examples](#examples)
+        * [Negation](#negation)
+        * [Unsigned Cast to N Bits](#unsigned-cast-to-n-bits)
+            * [Examples](#examples-1)
+        * [Signed Cast to N Bits](#signed-cast-to-n-bits)
+            * [Examples](#examples-2)
+        * [Addition](#addition)
+        * [Subtraction](#subtraction)
+        * [Unsigned Multiplication](#unsigned-multiplication)
 
 <!-- vim-markdown-toc -->
 
@@ -195,3 +207,55 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 | Arithmetic Shift Right    | `a @>> b` |
 | Arithmetic Shift Left     | `a @<< b` |
 
+
+### Specific Operations
+
+#### Logical Not
+
+`!a` evaluates to `1` if `a` is `0`, and `0` otherwise.
+
+#### Bitwise Not
+
+`~a` evaluates to the bitwise inverse of `a` - i.e. it evaluates to the value produced by flipping each bit of `a` individually.
+
+##### Examples
+
+* `~0#8` evaluates to `0b1111_1111#8`
+* `~0b1010_1010` evaluates to `0b1111_1111_1111_1111_1111_1111_0101_0101` (due to the implicit 32-bit integer width default)
+
+#### Negation
+
+`-a` evaluates to the 2's complement negation of `a`.
+
+#### Unsigned Cast to N Bits
+
+`:[N]a`, where `N` is one of `8`, `16`, `32`, or `64`, is the value of `a` converted to an `N`-bit integer type. If `a` is smaller than `N` bits, it's zero-extended to `N` bits, and if it's larger, it's truncated.
+
+##### Examples
+
+* `:[8]0x1234#16` evaluates to `0x34#8`
+* `:[16]0xdeadbeef` evaluates to `0xbeef#16`
+* `:[32]0xff#8` evaluates to `0xff#32`
+
+#### Signed Cast to N Bits
+
+`@:[N]a`, where `N` is one of `8`, `16`, `32`, or `64`, is the value of `a` converted to an `N`-bit integer type. If `a` is smaller than `N` bits, it's sign-extended to `N` bits, and if it's larger, it's truncated.
+
+##### Examples
+
+* `:[8]0x1234#16` evaluates to `0x34#8`
+* `:[16]0xdeadbeef` evaluates to `0xbeef#16`
+* `:[32]0xff#8` evaluates to `0xffff_ffff#32`
+
+#### Addition
+
+`a + b` evaluates to the sum of `a` and `b`.
+
+#### Subtraction
+
+`a - b` evaluates to the difference between `a` and `b`.
+
+
+#### Unsigned Multiplication
+
+`a * b` evaluates to the product of `a` and `b`, treating both as unsigned values.
