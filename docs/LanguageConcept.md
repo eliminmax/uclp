@@ -50,6 +50,7 @@
         * [Logical Shift Right](#logical-shift-right)
         * [Arithmetic Shift Right](#arithmetic-shift-right)
         * [Shift Left](#shift-left)
+    * [Operator Precedence](#operator-precedence)
 
 <!-- vim-markdown-toc -->
 
@@ -362,3 +363,14 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 #### Shift Left
 
 `a << b` moves the bits of `a` `b` spaces over to the right, dropping the highest `b` bits, and filling the lowest `b` bits with 0.
+
+### Operator Precedence
+
+Operators are applied in the following order:
+
+1. Unary Operations (Logical Not, Bitwise Not, Negation, Cast to N Bits)
+2. Multiplication, Division, Modulo
+3. Addition and Subtraction
+4. Bitwise And, Or, and Xor
+5. Bit Shifts
+6. Comparison Operators
