@@ -193,7 +193,7 @@ while CONDITION {
 
 There are the normal unary and binary operations that most languages have, as well as downcasts to shrink integers to a smaller size, as well as sign extensions and zero extensions to grow them.
 
-By default, operations are assumed to follow unsigned semantics. For operations where unsigned and signed semantics differ, a signed variant exists, using the `@` sign at the start of the operator
+By default, operations are assumed to follow unsigned semantics. For operations where unsigned and signed semantics differ, a signed variant exists, using the `@` sign at the start of the operator.
 
 ### Overview and Syntax
 
