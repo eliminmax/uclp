@@ -18,6 +18,126 @@ struct token_sequence_builder {
     size_t capacity;
 };
 
+#ifdef SCANNER_STANDALONE
+static void debug_token(const Token *t) {
+    char *lexeme = malloc(t->lexeme.len + 1);
+    if (!lexeme) abort();
+    memcpy(lexeme, t->lexeme.text, t->lexeme.len);
+    char *nullfinder;
+
+    while ((nullfinder = memchr(lexeme, 0, t->lexeme.len))) *nullfinder = '.';
+    lexeme[t->lexeme.len] = 0;
+
+    static const char *const TEMPLATES[] = {
+        "L_SQUARE<line %zu, lexeme %s>\n",
+        "R_SQUARE<line %zu, lexeme %s>\n",
+        "L_CURLY<line %zu, lexeme %s>\n",
+        "R_CURLY<line %zu, lexeme %s>\n",
+        "L_PAREN<line %zu, lexeme %s>\n",
+        "R_PAREN<line %zu, lexeme %s>\n",
+        "ARITH_PLUS<line %zu, lexeme %s>\n",
+        "ARITH_MINUS<line %zu, lexeme %s>\n",
+        "ARITH_MUL<line %zu, lexeme %s>\n",
+        "ARITH_DIV<line %zu, lexeme %s>\n",
+        "ARITH_MOD<line %zu, lexeme %s>\n",
+        "ARITH_SIGNED_MUL<line %zu, lexeme %s>\n",
+        "ARITH_SIGNED_DIV<line %zu, lexeme %s>\n",
+        "ARITH_SIGNED_MOD<line %zu, lexeme %s>\n",
+        "CMP_EQ<line %zu, lexeme %s>\n",
+        "CMP_NE<line %zu, lexeme %s>\n",
+        "CMP_LT<line %zu, lexeme %s>\n",
+        "CMP_GT<line %zu, lexeme %s>\n",
+        "CMP_LE<line %zu, lexeme %s>\n",
+        "CMP_GE<line %zu, lexeme %s>\n",
+        "CMP_SIGNED_LT<line %zu, lexeme %s>\n",
+        "CMP_SIGNED_GT<line %zu, lexeme %s>\n",
+        "CMP_SIGNED_LE<line %zu, lexeme %s>\n",
+        "CMP_SIGNED_GE<line %zu, lexeme %s>\n",
+        "LOGICAL_AND<line %zu, lexeme %s>\n",
+        "LOGICAL_OR<line %zu, lexeme %s>\n",
+        "BIT_AND<line %zu, lexeme %s>\n",
+        "BIT_NOT<line %zu, lexeme %s>\n",
+        "BIT_OR<line %zu, lexeme %s>\n",
+        "BIT_XOR<line %zu, lexeme %s>\n",
+        "SHR_LOG<line %zu, lexeme %s>\n",
+        "SHR_ARITH<line %zu, lexeme %s>\n",
+        "SHL<line %zu, lexeme %s>\n",
+        "ARROW<line %zu, lexeme %s>\n",
+        "SEMICOLON<line %zu, lexeme %s>\n",
+        "COLON<line %zu, lexeme %s>\n",
+        "EQ_ASSIGN<line %zu, lexeme %s>\n",
+        "COMMA<line %zu, lexeme %s>\n",
+        "LOG_AND<line %zu, lexeme %s>\n",
+        "LOG_OR<line %zu, lexeme %s>\n",
+        "CAST_I8<line %zu, lexeme %s>\n",
+        "CAST_I16<line %zu, lexeme %s>\n",
+        "CAST_i32<line %zu, lexeme %s>\n",
+        "CAST_I64<line %zu, lexeme %s>\n",
+        "CAST_SIGNED_I8<line %zu, lexeme %s>\n",
+        "CAST_SIGNED_I16<line %zu, lexeme %s>\n",
+        "CAST_SIGNED_i32<line %zu, lexeme %s>\n",
+        "CAST_SIGNED_I64<line %zu, lexeme %s>\n",
+        "KW_LET<line %zu, lexeme %s>\n",
+        "KW_FUNC<line %zu, lexeme %s>\n",
+        "KW_IF<line %zu, lexeme %s>\n",
+        "KW_ELIF<line %zu, lexeme %s>\n",
+        "KW_ELSE<line %zu, lexeme %s>\n",
+        "KW_WHILE<line %zu, lexeme %s>\n",
+        "KW_I8<line %zu, lexeme %s>\n",
+        "KW_I16<line %zu, lexeme %s>\n",
+        "KW_I32<line %zu, lexeme %s>\n",
+        "KW_I64<line %zu, lexeme %s>\n",
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        "LITERAL_IDENT<line %zu, lexeme %s>\n",
+        "LITERAL_STR<line %zu, lexeme %s>\n",
+        "BLOCK_COMMENT<line %zu, lexeme %s>\n",
+        "COMMENT<line %zu, lexeme %s>\n",
+        "END<line %zu, lexeme %s>\n",
+    };
+
+    switch (t->type) {
+        case LITERAL_INT8:
+            printf(
+                "LITERAL_INT8<line %zu, lexeme %s, value %" PRIu8 ">\n",
+                t->line,
+                lexeme,
+                t->literal_i8.u
+            );
+            break;
+        case LITERAL_INT16:
+            printf(
+                "LITERAL_INT16<line %zu, lexeme %s, value %" PRIu16 ">\n",
+                t->line,
+                lexeme,
+                t->literal_i16.u
+            );
+            break;
+        case LITERAL_INT32:
+            printf(
+                "LITERAL_INT32<line %zu, lexeme %s, value %" PRIu32 ">\n",
+                t->line,
+                lexeme,
+                t->literal_i32.u
+            );
+            break;
+        case LITERAL_INT64:
+            printf(
+                "LITERAL_INT64<line %zu, lexeme %s, value %" PRIu64 ">\n",
+                t->line,
+                lexeme,
+                t->literal_i64.u
+            );
+            break;
+        default:
+            printf(TEMPLATES[t->type], t->line, lexeme);
+    }
+    free(lexeme);
+}
+#endif
+
 extern inline void destroy_token(Token);
 
 static bool add_token(
@@ -42,7 +162,7 @@ static bool add_token(
     );
     builder->sequence.ntokens++;
 #ifdef SCANNER_STANDALONE
-    printf("%s -> %" PRIu8 "\n", yytext, (uint8_t)token->type);
+    debug_token(token);
 #endif
     return true;
 }
