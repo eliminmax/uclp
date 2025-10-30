@@ -104,7 +104,7 @@ static void parse_int(Token *token, const char *start, int base) {
 %pointer
 whitespace [ \n\t]+
 
-char_literal '([^'\\"]|\\[ntr]|\\x[0-9a-f]{2}|\[0-9]{1,3})'
+char_literal '([^'\\"]|\\[ntr]|\\x[0-9a-f]{2}|\\[0-7]{1,3})'
 
 string_literal \"([^"]|\\\")*\"
 int_size_suffix (#8|#16|#32|#64)?
@@ -119,9 +119,7 @@ cast_16 :{whitespace}?\[{whitespace}?16{whitespace}?\]
 cast_32 :{whitespace}?\[{whitespace}?32{whitespace}?\]
 cast_64 :{whitespace}?\[{whitespace}?64{whitespace}?\]
 
-multiline_comment_body ([^*]|[*]/[^/])*
-
-comment ([/]{2}.*|\/\*.*\*\/)
+comment [/]{2}.*
 
 %%
     #define BASIC_TOKEN(t, l) \
@@ -161,25 +159,26 @@ i64 { BASIC_TOKEN(KW_I64, "i64"); }
 
 {char_literal} {
     char val;
-    if (*yytext == '\\') {
-        switch(yytext[1]) {
+    char *s = yytext + 1;
+    if (*s == '\\') {
+        switch(s[1]) {
             case 'n': val = '\n'; break;
             case 'r': val = '\r'; break;
             case 't': val = '\t'; break;
             case 'x':
-                val = strtoull(&yytext[2], NULL, 16);
+                val = strtoull(&s[2], NULL, 16);
                 break;
             case '\\':
             case '\"':
             case '\'':
-                val = yytext[1];
+                val = s[1];
                 break;
             default:
-                assert(isdigit(yytext[1]));
-                val = strtoull(&yytext[2], NULL, 8);
+                assert(isdigit(s[1]));
+                val = strtoull(&s[1], NULL, 8);
         }
     } else {
-        val = *yytext;
+        val = *s;
     }
     token = (Token) {
         .lexeme = current_lexeme(),
@@ -206,7 +205,6 @@ i64 { BASIC_TOKEN(KW_I64, "i64"); }
 {oct_literal} { parse_int(&token, yytext + 2, 8); add_token(&builder, &token); }
 {bin_literal} { parse_int(&token, yytext + 2, 2); add_token(&builder, &token); }
 
-
 {comment} {
     token = (Token){
         .type = COMMENT,
@@ -216,6 +214,17 @@ i64 { BASIC_TOKEN(KW_I64, "i64"); }
     };
     add_token(&builder, &token);
 }
+
+"/*"([^/]|[^*][/])*"*/" {
+    token = (Token){
+        .type = BLOCK_COMMENT,
+        .line = yylineno,
+        ._should_free = true,
+        .lexeme = current_lexeme(),
+    };
+    add_token(&builder, &token);
+}
+
 
 "[" { BASIC_TOKEN(L_SQUARE, "["); }
 "]" { BASIC_TOKEN(R_SQUARE, "]"); }
@@ -256,6 +265,7 @@ i64 { BASIC_TOKEN(KW_I64, "i64"); }
 "->" { BASIC_TOKEN(ARROW, "->"); }
 
 ";" { BASIC_TOKEN(SEMICOLON, ";"); }
+":" { BASIC_TOKEN(COLON, ":"); }
 "=" { BASIC_TOKEN(EQ_ASSIGN, "="); }
 ">>" { BASIC_TOKEN(SHR_LOG, ">>"); }
 "@>>" { BASIC_TOKEN(SHR_ARITH, "@>>"); }

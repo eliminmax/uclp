@@ -89,6 +89,8 @@ enum token_type : uint8_t {
     ARROW,
     // ";"
     SEMICOLON,
+    // ":"
+    COLON,
     // standalone "="
     EQ_ASSIGN,
     // ","
@@ -137,6 +139,7 @@ enum token_type : uint8_t {
     LITERAL_IDENT,
     LITERAL_STR,
 
+    BLOCK_COMMENT,
     COMMENT,
 
     END,
