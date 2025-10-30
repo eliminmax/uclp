@@ -50,6 +50,8 @@
         * [Logical Shift Right](#logical-shift-right)
         * [Arithmetic Shift Right](#arithmetic-shift-right)
         * [Shift Left](#shift-left)
+        * [Logical And](#logical-and)
+        * [Logical Or](#logical-or)
     * [Operator Precedence](#operator-precedence)
 
 <!-- vim-markdown-toc -->
@@ -197,37 +199,39 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 
 ### Overview and Syntax
 
-| Operation                 | Syntax    |
-|---------------------------|-----------|
-| Logical Not               | `!a`      |
-| Bitwise Not               | `~a`      |
-| Negation                  | `-a`      |
-| Unsigned Cast to N Bits   | `:[N]a`   |
-| Signed Cast to N Bits     | `@:[N]a`  |
-| Addition                  | `a + b`   |
-| Subtraction               | `a - b`   |
-| Unsigned Multiplication   | `a * b`   |
-| Unsigned Division         | `a / b`   |
-| Unsigned Modulo           | `a % b`   |
-| Signed Multiplication     | `a @* b`  |
-| Signed Division           | `a @/ b`  |
-| Signed Modulo             | `a @% b`  |
-| Equal                     | `a == b`  |
-| Not Equal                 | `a != b`  |
-| Unsigned Less Than        | `a < b`   |
-| Unsigned Greater Than     | `a > b`   |
-| Unsigned Less or Equal    | `a <= b`  |
-| Unsigned Greater or Equal | `a >= b`  |
-| Signed Less Than          | `a @< b`  |
-| Signed Greater Than       | `a @> b`  |
-| Signed Less or Equal      | `a @<= b` |
-| Signed Greater or Equal   | `a @>= b` |
-| Bitwise And               | `a & b`   |
-| Bitwise Or                | `a \| b`  |
-| Bitwise Xor               | `a ^ b`   |
-| Logical Shift Right       | `a >> b`  |
-| Arithmetic Shift Right    | `a @>> b` |
-| Shift Left                | `a << b`  |
+| Operation                 | Syntax     |
+|---------------------------|------------|
+| Logical Not               | `!a`       |
+| Bitwise Not               | `~a`       |
+| Negation                  | `-a`       |
+| Unsigned Cast to N Bits   | `:[N]a`    |
+| Signed Cast to N Bits     | `@:[N]a`   |
+| Addition                  | `a + b`    |
+| Subtraction               | `a - b`    |
+| Unsigned Multiplication   | `a * b`    |
+| Unsigned Division         | `a / b`    |
+| Unsigned Modulo           | `a % b`    |
+| Signed Multiplication     | `a @* b`   |
+| Signed Division           | `a @/ b`   |
+| Signed Modulo             | `a @% b`   |
+| Equal                     | `a == b`   |
+| Not Equal                 | `a != b`   |
+| Unsigned Less Than        | `a < b`    |
+| Unsigned Greater Than     | `a > b`    |
+| Unsigned Less or Equal    | `a <= b`   |
+| Unsigned Greater or Equal | `a >= b`   |
+| Signed Less Than          | `a @< b`   |
+| Signed Greater Than       | `a @> b`   |
+| Signed Less or Equal      | `a @<= b`  |
+| Signed Greater or Equal   | `a @>= b`  |
+| Bitwise And               | `a & b`    |
+| Bitwise Or                | `a \| b`   |
+| Bitwise Xor               | `a ^ b`    |
+| Logical Shift Right       | `a >> b`   |
+| Arithmetic Shift Right    | `a @>> b`  |
+| Shift Left                | `a << b`   |
+| Logical And               | `a && b`   |
+| Logical Or                | `a \|\| b` |
 
 ### Specific Operations
 
@@ -363,6 +367,14 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 #### Shift Left
 
 `a << b` moves the bits of `a` `b` spaces over to the right, dropping the highest `b` bits, and filling the lowest `b` bits with 0.
+
+#### Logical And
+
+`a && b` evaluates to 1 if both `a` and `b` evaluate to nonzero values.
+
+#### Logical Or
+
+`a || b` evaluates to 1 if either `a` or `b` evaluate to nonzero values.
 
 ### Operator Precedence
 
