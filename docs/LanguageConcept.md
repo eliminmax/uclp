@@ -26,14 +26,17 @@
             * [Examples](#examples-1)
         * [Signed Cast to N Bits](#signed-cast-to-n-bits)
             * [Examples](#examples-2)
-        * [Addition](#addition)
-        * [Subtraction](#subtraction)
         * [Unsigned Multiplication](#unsigned-multiplication)
         * [Unsigned Division](#unsigned-division)
         * [Unsigned Modulo](#unsigned-modulo)
         * [Signed Multiplication](#signed-multiplication)
         * [Signed Division](#signed-division)
         * [Signed Modulo](#signed-modulo)
+        * [Addition](#addition)
+        * [Subtraction](#subtraction)
+        * [Logical Shift Right](#logical-shift-right)
+        * [Arithmetic Shift Right](#arithmetic-shift-right)
+        * [Shift Left](#shift-left)
         * [Equal](#equal)
         * [Not Equal](#not-equal)
         * [Unsigned Less Than](#unsigned-less-than)
@@ -47,9 +50,6 @@
         * [Bitwise And](#bitwise-and)
         * [Bitwise Or](#bitwise-or)
         * [Bitwise Xor](#bitwise-xor)
-        * [Logical Shift Right](#logical-shift-right)
-        * [Arithmetic Shift Right](#arithmetic-shift-right)
-        * [Shift Left](#shift-left)
         * [Logical And](#logical-and)
         * [Logical Or](#logical-or)
 
@@ -271,14 +271,6 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 * `:[16]0xdeadbeef` evaluates to `0xbeef#16`
 * `:[32]0xff#8` evaluates to `0xffff_ffff#32`
 
-#### Addition
-
-`a + b` evaluates to the sum of `a` and `b`.
-
-#### Subtraction
-
-`a - b` evaluates to the difference between `a` and `b`.
-
 #### Unsigned Multiplication
 
 `a * b` evaluates to the product of `a` and `b`, treating both as unsigned values.
@@ -302,6 +294,26 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 #### Signed Modulo
 
 `a % b` evaluates to the remainder of `a` divided by `b`, treating both as unsigned values.
+
+#### Addition
+
+`a + b` evaluates to the sum of `a` and `b`.
+
+#### Subtraction
+
+`a - b` evaluates to the difference between `a` and `b`.
+
+#### Logical Shift Right
+
+`a >> b` moves the bits of `a` `b` spaces over to the right, dropping the lowest `b` bits, and filling the highest `b` bits with 0.
+
+#### Arithmetic Shift Right
+
+`a >> b` moves the bits of `a` `b` spaces over to the right, dropping the lowest `b` bits, and filling the highest `b` bits with the highest bit of `a`.
+
+#### Shift Left
+
+`a << b` moves the bits of `a` `b` spaces over to the right, dropping the highest `b` bits, and filling the lowest `b` bits with 0.
 
 #### Equal
 
@@ -354,18 +366,6 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 #### Bitwise Xor
 
 `a ^ b` evaluates to the value produced by going bit by bit, setting the bit to 1 if exactly 1 of the equivalent bits in `a` and `b` is 1, and 0 otherwise.
-
-#### Logical Shift Right
-
-`a >> b` moves the bits of `a` `b` spaces over to the right, dropping the lowest `b` bits, and filling the highest `b` bits with 0.
-
-#### Arithmetic Shift Right
-
-`a >> b` moves the bits of `a` `b` spaces over to the right, dropping the lowest `b` bits, and filling the highest `b` bits with the highest bit of `a`.
-
-#### Shift Left
-
-`a << b` moves the bits of `a` `b` spaces over to the right, dropping the highest `b` bits, and filling the lowest `b` bits with 0.
 
 #### Logical And
 
