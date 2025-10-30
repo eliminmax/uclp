@@ -205,14 +205,20 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 | Negation                  | `-a`       | 1        |
 | Unsigned Cast to N Bits   | `:[N]a`    | 1        |
 | Signed Cast to N Bits     | `@:[N]a`   | 1        |
-| Addition                  | `a + b`    | 3        |
-| Subtraction               | `a - b`    | 3        |
 | Unsigned Multiplication   | `a * b`    | 2        |
 | Unsigned Division         | `a / b`    | 2        |
 | Unsigned Modulo           | `a % b`    | 2        |
 | Signed Multiplication     | `a @* b`   | 2        |
 | Signed Division           | `a @/ b`   | 2        |
 | Signed Modulo             | `a @% b`   | 2        |
+| Addition                  | `a + b`    | 3        |
+| Subtraction               | `a - b`    | 3        |
+| Bitwise And               | `a & b`    | 4        |
+| Bitwise Or                | `a \| b`   | 4        |
+| Bitwise Xor               | `a ^ b`    | 4        |
+| Logical Shift Right       | `a >> b`   | 5        |
+| Arithmetic Shift Right    | `a @>> b`  | 5        |
+| Shift Left                | `a << b`   | 5        |
 | Equal                     | `a == b`   | 6        |
 | Not Equal                 | `a != b`   | 6        |
 | Unsigned Less Than        | `a < b`    | 6        |
@@ -223,12 +229,6 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 | Signed Greater Than       | `a @> b`   | 6        |
 | Signed Less or Equal      | `a @<= b`  | 6        |
 | Signed Greater or Equal   | `a @>= b`  | 6        |
-| Bitwise And               | `a & b`    | 4        |
-| Bitwise Or                | `a \| b`   | 4        |
-| Bitwise Xor               | `a ^ b`    | 4        |
-| Logical Shift Right       | `a >> b`   | 5        |
-| Arithmetic Shift Right    | `a @>> b`  | 5        |
-| Shift Left                | `a << b`   | 5        |
 | Logical And               | `a && b`   | 7        |
 | Logical Or                | `a \|\| b` | 7        |
 
