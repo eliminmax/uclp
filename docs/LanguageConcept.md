@@ -52,7 +52,6 @@
         * [Shift Left](#shift-left)
         * [Logical And](#logical-and)
         * [Logical Or](#logical-or)
-    * [Operator Precedence](#operator-precedence)
 
 <!-- vim-markdown-toc -->
 
@@ -199,39 +198,39 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 
 ### Overview and Syntax
 
-| Operation                 | Syntax     |
-|---------------------------|------------|
-| Logical Not               | `!a`       |
-| Bitwise Not               | `~a`       |
-| Negation                  | `-a`       |
-| Unsigned Cast to N Bits   | `:[N]a`    |
-| Signed Cast to N Bits     | `@:[N]a`   |
-| Addition                  | `a + b`    |
-| Subtraction               | `a - b`    |
-| Unsigned Multiplication   | `a * b`    |
-| Unsigned Division         | `a / b`    |
-| Unsigned Modulo           | `a % b`    |
-| Signed Multiplication     | `a @* b`   |
-| Signed Division           | `a @/ b`   |
-| Signed Modulo             | `a @% b`   |
-| Equal                     | `a == b`   |
-| Not Equal                 | `a != b`   |
-| Unsigned Less Than        | `a < b`    |
-| Unsigned Greater Than     | `a > b`    |
-| Unsigned Less or Equal    | `a <= b`   |
-| Unsigned Greater or Equal | `a >= b`   |
-| Signed Less Than          | `a @< b`   |
-| Signed Greater Than       | `a @> b`   |
-| Signed Less or Equal      | `a @<= b`  |
-| Signed Greater or Equal   | `a @>= b`  |
-| Bitwise And               | `a & b`    |
-| Bitwise Or                | `a \| b`   |
-| Bitwise Xor               | `a ^ b`    |
-| Logical Shift Right       | `a >> b`   |
-| Arithmetic Shift Right    | `a @>> b`  |
-| Shift Left                | `a << b`   |
-| Logical And               | `a && b`   |
-| Logical Or                | `a \|\| b` |
+| Operation                 | Syntax     | Priority |
+|---------------------------|------------|----------|
+| Logical Not               | `!a`       | 1        |
+| Bitwise Not               | `~a`       | 1        |
+| Negation                  | `-a`       | 1        |
+| Unsigned Cast to N Bits   | `:[N]a`    | 1        |
+| Signed Cast to N Bits     | `@:[N]a`   | 1        |
+| Addition                  | `a + b`    | 3        |
+| Subtraction               | `a - b`    | 3        |
+| Unsigned Multiplication   | `a * b`    | 2        |
+| Unsigned Division         | `a / b`    | 2        |
+| Unsigned Modulo           | `a % b`    | 2        |
+| Signed Multiplication     | `a @* b`   | 2        |
+| Signed Division           | `a @/ b`   | 2        |
+| Signed Modulo             | `a @% b`   | 2        |
+| Equal                     | `a == b`   | 6        |
+| Not Equal                 | `a != b`   | 6        |
+| Unsigned Less Than        | `a < b`    | 6        |
+| Unsigned Greater Than     | `a > b`    | 6        |
+| Unsigned Less or Equal    | `a <= b`   | 6        |
+| Unsigned Greater or Equal | `a >= b`   | 6        |
+| Signed Less Than          | `a @< b`   | 6        |
+| Signed Greater Than       | `a @> b`   | 6        |
+| Signed Less or Equal      | `a @<= b`  | 6        |
+| Signed Greater or Equal   | `a @>= b`  | 6        |
+| Bitwise And               | `a & b`    | 4        |
+| Bitwise Or                | `a \| b`   | 4        |
+| Bitwise Xor               | `a ^ b`    | 4        |
+| Logical Shift Right       | `a >> b`   | 5        |
+| Arithmetic Shift Right    | `a @>> b`  | 5        |
+| Shift Left                | `a << b`   | 5        |
+| Logical And               | `a && b`   | 7        |
+| Logical Or                | `a \|\| b` | 7        |
 
 ### Specific Operations
 
@@ -375,14 +374,3 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 #### Logical Or
 
 `a || b` evaluates to 1 if either `a` or `b` evaluate to nonzero values.
-
-### Operator Precedence
-
-Operators are applied in the following order:
-
-1. Unary Operations (Logical Not, Bitwise Not, Negation, Cast to N Bits)
-2. Multiplication, Division, Modulo
-3. Addition and Subtraction
-4. Bitwise And, Or, and Xor
-5. Bit Shifts
-6. Comparison Operators
