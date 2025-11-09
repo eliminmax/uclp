@@ -52,6 +52,18 @@
         * [Bitwise Xor](#bitwise-xor)
         * [Logical And](#logical-and)
         * [Logical Or](#logical-or)
+* [Pointers](#pointers-1)
+    * [Pointer Alignment](#pointer-alignment)
+    * [Casting Pointers](#casting-pointers)
+* [Arrays](#arrays-1)
+* [Strings and Chars](#strings-and-chars)
+* [C Interop with `dynamic`](#c-interop-with-dynamic)
+    * [C Types](#c-types)
+    * [Calling C Functions](#calling-c-functions)
+        * [Example: `libcpuinfo`](#example-libcpuinfo)
+    * [`*dynamic` Pointers](#dynamic-pointers)
+        * [Example: `malloc` and `free`](#example-malloc-and-free)
+* [`opaque` types](#opaque-types)
 
 <!-- vim-markdown-toc -->
 
@@ -374,3 +386,116 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 #### Logical Or
 
 `a || b` evaluates to 1 if either `a` or `b` evaluate to nonzero values.
+
+## Pointers
+
+Pointers use C-like syntax, with `*` as the dereference operator, and `&` as the address operator.
+
+Unlike C, however, the pointer is part of the type, not the binding, so instead of declaring a pointer "i" to an `i8` with `let *i: i8;`, the syntax is `let i: *i8`. When declaring a function `foo` which takes a pointer to an `i8` in a parameter called "ptr_arg", the syntax is  `func foo(*i8 ptr_arg)`.
+
+### Pointer Alignment
+
+Some types must be properly aligned in memory. Specifically, an `i16` must be at an even address, an `i32` must be at a multiple of 4, and `i64`s and pointers must be at a multiple of 8.
+
+### Casting Pointers
+
+The `:{T}` operator converts a pointer to another type to type `T`. Casting a type with a narrower alignment to a one with a wider alignment is not allowed, nor is casting to or from non-pointer types.
+
+## Arrays
+
+Arrays are fixed-sized sequences of data, stored sequentially in memory. They have the syntax `[a, b, c, d]`.
+The syntax for the type of an array of N elements of type `T` is `T[N]`. For example, to declare an array of 3 `i32`s, the syntax would be `i32[3]`.
+
+To declare an array of 5 16-bit values, called "arr" and set them all to 1, the following syntax is used:
+
+```uclp
+let arr = [1#16, 1#16, 1#16, 1#16, 1#16];
+```
+
+To declare an uninitialized array of 3 8-bit values, called "uninit", the following syntax is used:
+
+```uclp
+let uninit: i8[3];
+```
+
+## Strings and Chars
+
+Chars and strings are not a "proper" type, but instead are syntactic sugar for 8-bit numbers and 8-bit arrays, respectively.
+
+A single ASCII character between 2 quotation marks is read as a numeric value, with the exception of `'` and `\`.
+
+`\` can be used for escape sequences, with the following supported:
+
+* `\t` - 9 (the ASCII encoding for Tab)
+* `\n` - 10 (the ASCII encoding for Line Feed)
+* `\r` - 13 (the ASCII encoding for Carriage Return)
+* `\x` - the next 2 bytes are treated as a hexadecimal-encoded arbitrary byte value
+    * for example: `'\xff'` is equivalent to `0xff#8`.
+* `\\` - 92 (the ASCII encoding for backslash)
+* `\'` - 27 (the ASCII encoding for single quote)
+* `\"` - 34 (the ASCII encoding for double quote)
+
+Strings are just arrays of 8-bit values. For convenient C interop, they will have a null byte after them in memory, but it's not part of the array.
+
+For example, `"abcdef"` would be parsed as a 6-byte array, equivalent to `[0x61#8, 0x62#8, 0x63#8, 0x64#8, 0x65#8, 0x66#8]`.
+While followed by a null byte, it's not considered part of the array, for the purposes of `foreach` loops.
+
+## C Interop with `dynamic`
+
+### C Types
+
+For the purposes of C interop, booleans can be represented as `i8`s, and C integer types can be represented UCLP integer types with the same size and alignment. Additionally, `void *` pointers can be used with the special `*dynamic` pointer type.
+
+Because C functions are called using the SYSV calling convention for the AMD64 architecture, the type mapping is as follows:
+
+| C Type                                                                                      | UCLP Type |
+|---------------------------------------------------------------------------------------------|-----------|
+| `char`<br>`signed char`<br>`_Bool`<br>`unsigned char`<br>`int8_t`<br>`uint8_t`              | `i8`      |
+| `short`<br>`unsigned short`<br>`int16_t`<br>`uint16_t`                                      | `i16`     |
+| `int`<br>`unsigned int`<br>`int32_t`<br>`uint32_t`                                          | `i32`     |
+| `long`<br>`unsigned long`<br>`long long`<br>`unsigned long long`<br>`int64_t`<br>`uint64_t` | `i64`     |
+
+
+### Calling C Functions
+
+Accessing foreign data and functions is done using a simple `dlsym`-based approach, resulting in a rather leaky abstraction.
+
+To declare foreign functions or data, `dynamic["LIB"]` is added before the `func` or the `let` declaration, and `# "SYM"` is placed after the name of the foreign object, where "LIB" is the filename of the shared object to pass to `dlopen`, and "SYM" is the symbol within that object.
+
+#### Example: `libcpuinfo`
+
+To use libcpuinfo to determine the number of CPU cores in C, the following functions are used:
+
+```c
+// must be called to set things up
+bool cpuinfo_initialize(void);
+// returns the number of CPU cores
+uint32_t cpuinfo_get_cores_count(void);
+// should be called to clean things up
+void cpuinfo_deinitialize(void);
+```
+
+On Debian 13, the shared object for libcpuinfo is `libcpuinfo.so.0`, so to use those functions in UCLP, the following declarations would be needed.
+
+```uclp
+dynamic["libcpuinfo.so.0"] func cpuinfo_init # "cpuinfo_initialize" () -> i8;
+dynamic["libcpuinfo.so.0"] func get_core_count # "cpuinfo_get_cores_count" () -> i32;
+dynamic["libcpuinfo.so.0"] func cpuinfo_deinit # "cpuinfo_deinitialize" ();
+```
+
+### `*dynamic` Pointers
+
+A `dynamic` function can be declared with `*dynamic` as an argument type, and/or as the return type. It is implicitly convertable to or from any other pointer type at the call site of the `*dynamic` function.
+
+#### Example: `malloc` and `free`
+
+To use the glibc malloc functions on most Linux systems:
+
+```uclp
+dynamic["libc.so.6"] func malloc(i64 size) -> *dynamic;
+dynamic["libc.so.6"] func free(*dynamic ptr);
+```
+
+## `opaque` types
+
+For the purposes of C interop, the syntax `opaque.SIZE.ALIGNMENT` can be used as a type, where `ALIGNMENT` is a number with a value that's one of `8`, `16`, `32`, or `64`, and `SIZE` is a multiple of the number used for `ALIGNMENT`
