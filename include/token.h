@@ -61,6 +61,12 @@ enum token_type : uint8_t {
     // "@>="
     CMP_SIGNED_GE,
 
+    // pointer operations
+    // ".*"
+    DEREF,
+    // ".&"
+    REF,
+
     // "&&"
     LOGICAL_AND,
     // "||"
@@ -85,6 +91,8 @@ enum token_type : uint8_t {
     SHL,
 
     // misc. tokens
+    // "#"
+    POUND_SIGN,
     // "->"
     ARROW,
     // ";"
@@ -102,33 +110,35 @@ enum token_type : uint8_t {
     LOG_OR,
 
     // casts
-    // ":[8]"
-    CAST_I8,
-    // ":[16]"
-    CAST_I16,
-    // ":[32]"
-    CAST_i32,
-    // ":[64]"
-    CAST_I64,
-    // "@:[8]"
-    CAST_SIGNED_I8,
-    // "@:[16]"
-    CAST_SIGNED_I16,
-    // "@:[32]"
-    CAST_SIGNED_i32,
-    // "@:[64]"
-    CAST_SIGNED_I64,
+    // ":["
+    UNSIGNED_CAST,
+    // "@:["
+    SIGNED_CAST,
 
     // keyword tokens
+    // "let"
     KW_LET,
+    // "func"
     KW_FUNC,
+    // "if"
     KW_IF,
+    // "elif"
     KW_ELIF,
+    // "else"
     KW_ELSE,
+    // "while"
     KW_WHILE,
+    // "dynamic"
+    KW_DYNAMIC,
+    // "opaque"
+    KW_OPAQUE,
+    // "i8"
     KW_I8,
+    // "i16"
     KW_I16,
+    // "i32"
     KW_I32,
+    // "i64"
     KW_I64,
 
     // literal
@@ -138,9 +148,18 @@ enum token_type : uint8_t {
     LITERAL_INT64,
     LITERAL_IDENT,
     LITERAL_STR,
+    RAW_INT,
 
     BLOCK_COMMENT,
     COMMENT,
+
+    // Lex-time Errors
+    // Integer literal too large for size
+    INT_TOO_LARGE,
+    // Integer literal with an unsupported size
+    BAD_BIT_LEN,
+    // Generic unparsable token
+    UNPARSEABLE,
 
     END,
 };

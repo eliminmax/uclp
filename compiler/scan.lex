@@ -55,6 +55,8 @@ static void debug_token(const Token *t) {
         "CMP_SIGNED_GE<line %zu, lexeme %s>\n",
         "LOGICAL_AND<line %zu, lexeme %s>\n",
         "LOGICAL_OR<line %zu, lexeme %s>\n",
+        "DEREF<line %zu, lexeme %s>\n",
+        "REF<line %zu, lexeme %s>\n",
         "BIT_AND<line %zu, lexeme %s>\n",
         "BIT_NOT<line %zu, lexeme %s>\n",
         "BIT_OR<line %zu, lexeme %s>\n",
@@ -62,6 +64,7 @@ static void debug_token(const Token *t) {
         "SHR_LOG<line %zu, lexeme %s>\n",
         "SHR_ARITH<line %zu, lexeme %s>\n",
         "SHL<line %zu, lexeme %s>\n",
+        "POUND_SIGN<line %zu, lexeme %s>\n",
         "ARROW<line %zu, lexeme %s>\n",
         "SEMICOLON<line %zu, lexeme %s>\n",
         "COLON<line %zu, lexeme %s>\n",
@@ -69,32 +72,32 @@ static void debug_token(const Token *t) {
         "COMMA<line %zu, lexeme %s>\n",
         "LOG_AND<line %zu, lexeme %s>\n",
         "LOG_OR<line %zu, lexeme %s>\n",
-        "CAST_I8<line %zu, lexeme %s>\n",
-        "CAST_I16<line %zu, lexeme %s>\n",
-        "CAST_i32<line %zu, lexeme %s>\n",
-        "CAST_I64<line %zu, lexeme %s>\n",
-        "CAST_SIGNED_I8<line %zu, lexeme %s>\n",
-        "CAST_SIGNED_I16<line %zu, lexeme %s>\n",
-        "CAST_SIGNED_i32<line %zu, lexeme %s>\n",
-        "CAST_SIGNED_I64<line %zu, lexeme %s>\n",
+        "UNSIGNED_CAST<line %zu, lexeme %s>\n",
+        "SIGNED_CAST<line %zu, lexeme %s>\n",
         "KW_LET<line %zu, lexeme %s>\n",
         "KW_FUNC<line %zu, lexeme %s>\n",
         "KW_IF<line %zu, lexeme %s>\n",
         "KW_ELIF<line %zu, lexeme %s>\n",
         "KW_ELSE<line %zu, lexeme %s>\n",
         "KW_WHILE<line %zu, lexeme %s>\n",
+        "KW_DYNAMIC<line %zu, lexeme %s>\n",
+        "KW_OPAQUE<line %zu, lexeme %s>\n",
         "KW_I8<line %zu, lexeme %s>\n",
         "KW_I16<line %zu, lexeme %s>\n",
         "KW_I32<line %zu, lexeme %s>\n",
         "KW_I64<line %zu, lexeme %s>\n",
-        NULL,
-        NULL,
-        NULL,
-        NULL,
+        NULL /* LITERAL_INT8 */,
+        NULL /* LITERAL_INT16 */,
+        NULL /* LITERAL_INT32 */,
+        NULL /* LITERAL_INT64 */,
         "LITERAL_IDENT<line %zu, lexeme %s>\n",
         "LITERAL_STR<line %zu, lexeme %s>\n",
+        NULL /* RAW_INT */,
         "BLOCK_COMMENT<line %zu, lexeme %s>\n",
         "COMMENT<line %zu, lexeme %s>\n",
+        "INT_TOO_LARGE<line %zu, lexeme %s>\n",
+        "BAD_BIT_LEN<line %zu, lexeme %s>\n",
+        "UNPARSEABLE<line %zu, lexeme %s>\n",
         "END<line %zu, lexeme %s>\n",
     };
 
@@ -131,6 +134,13 @@ static void debug_token(const Token *t) {
                 t->literal_i64.u
             );
             break;
+        case RAW_INT:
+            printf(
+                "RAW_INT<line %zu, lexeme %s, value %" PRIu32 ">\n",
+                t->line,
+                lexeme,
+                t->literal_i32.u
+            );
         default:
             printf(TEMPLATES[t->type], t->line, lexeme);
     }
@@ -192,28 +202,37 @@ static void parse_int(Token *token, const char *start, int base) {
     token->line = yylineno;
     unsigned long long val = strtoull(start, &end, base);
     if (*end == '#') {
-        switch (end[1]) {
-            case '8':
-                assert(val <= UINT8_MAX);
+        errno = 0;
+        unsigned long long bit_len = strtoll(&end[1], NULL, 10);
+        if (errno) bit_len = 0;
+        switch (bit_len) {
+            case 8:
+                if (val > UINT8_MAX) goto too_large;
                 token->type = LITERAL_INT8, token->literal_i8.u = val;
                 break;
-            case '1':
-                assert(val <= UINT16_MAX && end[2] == '6');
+            case 16:
+                if (val > UINT16_MAX) goto too_large;
                 token->type = LITERAL_INT16, token->literal_i16.u = val;
                 break;
-            case '3':
-                assert(val <= UINT32_MAX && end[2] == '2');
+            case 32:
+                if (val > UINT32_MAX) goto too_large;
                 token->type = LITERAL_INT32, token->literal_i32.u = val;
                 break;
-            case '6':
-                assert(val <= UINT64_MAX && end[2] == '4');
+            case 64:
+                if (val > UINT64_MAX) goto too_large;
                 token->type = LITERAL_INT64, token->literal_i64.u = val;
                 break;
+                break;
+            default:
+                token->type = BAD_BIT_LEN;
         }
     } else {
-        assert(val <= UINT32_MAX);
-        token->type = LITERAL_INT32, token->literal_i32.u = val;
+        if (val > UINT32_MAX) goto too_large;
+        token->type = RAW_INT, token->literal_i32.u = val;
     }
+    return;
+    too_large:
+        token->type = INT_TOO_LARGE;
 }
 
 %}
@@ -224,20 +243,16 @@ static void parse_int(Token *token, const char *start, int base) {
 %pointer
 whitespace [ \n\t]+
 
-char_literal '([^'\\"]|\\[ntr]|\\x[0-9a-f]{2}|\\[0-7]{1,3})'
+escaped_char \\[ntr'\"\\]|\\x[0-8a-f]{2}|\\[0-3]?([0-7]{1,2})
+char_literal '([^'\\\n\r]|{escaped_char})'
+string_literal \"([^"\\\n\r]|{escaped_char})*\"
 
-string_literal \"([^"]|\\\")*\"
-int_size_suffix (#8|#16|#32|#64)?
+int_size_suffix (#[0-9]+)?
 dec_literal [0-9]+{int_size_suffix}
 bin_literal 0b[01]+{int_size_suffix}
 oct_literal 0o[0-7]+{int_size_suffix}
 hex_literal 0x[0-9a-fA-F]+{int_size_suffix}
 ident [_a-zA-Z][_0-9a-zA-Z]*
-
-cast_8 :{whitespace}?\[{whitespace}?8{whitespace}?\]
-cast_16 :{whitespace}?\[{whitespace}?16{whitespace}?\]
-cast_32 :{whitespace}?\[{whitespace}?32{whitespace}?\]
-cast_64 :{whitespace}?\[{whitespace}?64{whitespace}?\]
 
 comment [/]{2}.*
 
@@ -256,16 +271,18 @@ comment [/]{2}.*
 
 {whitespace}
 
-func { BASIC_TOKEN(KW_FUNC, "func"); }
-let { BASIC_TOKEN(KW_LET, "let"); }
-if { BASIC_TOKEN(KW_IF, "if"); }
-elif { BASIC_TOKEN(KW_ELIF, "elif"); }
-else { BASIC_TOKEN(KW_ELSE, "else"); }
-while { BASIC_TOKEN(KW_WHILE, "while"); }
-i8 { BASIC_TOKEN(KW_I8, "i8"); }
-i16 { BASIC_TOKEN(KW_I16, "i16"); }
-i32 { BASIC_TOKEN(KW_I32, "i32"); }
-i64 { BASIC_TOKEN(KW_I64, "i64"); }
+"let" { BASIC_TOKEN(KW_LET, "let"); }
+"func" { BASIC_TOKEN(KW_FUNC, "func"); }
+"if" { BASIC_TOKEN(KW_IF, "if"); }
+"elif" { BASIC_TOKEN(KW_ELIF, "elif"); }
+"else" { BASIC_TOKEN(KW_ELSE, "else"); }
+"while" { BASIC_TOKEN(KW_WHILE, "while"); }
+"dynamic" { BASIC_TOKEN(KW_DYNAMIC, "dynamic"); }
+"opaque" { BASIC_TOKEN(KW_OPAQUE, "opaque"); }
+"i8" { BASIC_TOKEN(KW_I8, "i8"); }
+"i16" { BASIC_TOKEN(KW_I16, "i16"); }
+"i32" { BASIC_TOKEN(KW_I32, "i32"); }
+"i64" { BASIC_TOKEN(KW_I64, "i64"); }
 
 {ident} {
     token = (Token){
@@ -345,7 +362,6 @@ i64 { BASIC_TOKEN(KW_I64, "i64"); }
     add_token(&builder, &token);
 }
 
-
 "[" { BASIC_TOKEN(L_SQUARE, "["); }
 "]" { BASIC_TOKEN(R_SQUARE, "]"); }
 "{" { BASIC_TOKEN(L_CURLY, "{"); }
@@ -373,6 +389,9 @@ i64 { BASIC_TOKEN(KW_I64, "i64"); }
 "@>=" { BASIC_TOKEN(CMP_SIGNED_GE, "@>="); }
 "@<=" { BASIC_TOKEN(CMP_SIGNED_LE, "@<="); }
 
+".*" { BASIC_TOKEN(DEREF, ".*"); }
+".&" { BASIC_TOKEN(REF, ".&"); }
+
 "&&" { BASIC_TOKEN(LOG_AND, "&&"); }
 "||" { BASIC_TOKEN(LOG_OR, "||"); }
 
@@ -382,6 +401,7 @@ i64 { BASIC_TOKEN(KW_I64, "i64"); }
 "^" { BASIC_TOKEN(BIT_XOR, "^"); }
 "," { BASIC_TOKEN(COMMA, ","); }
 
+"#" { BASIC_TOKEN(POUND_SIGN, "#"); }
 "->" { BASIC_TOKEN(ARROW, "->"); }
 
 ";" { BASIC_TOKEN(SEMICOLON, ";"); }
@@ -390,7 +410,19 @@ i64 { BASIC_TOKEN(KW_I64, "i64"); }
 ">>" { BASIC_TOKEN(SHR_LOG, ">>"); }
 "@>>" { BASIC_TOKEN(SHR_ARITH, "@>>"); }
 "<<" { BASIC_TOKEN(SHL, "<<"); }
-. { fprintf(stderr, "Error lexing \"%s\".\n", yytext); exit(EXIT_FAILURE); }
+
+":[" { BASIC_TOKEN(UNSIGNED_CAST, ":["); }
+"@:[" { BASIC_TOKEN(SIGNED_CAST, ":["); }
+
+[0-9][A-Za-z_][A-Za-z0-9_]*|. {
+    token = (Token){
+        .type = UNPARSEABLE,
+        .line = yylineno,
+        ._should_free = true,
+        .lexeme = current_lexeme(),
+    };
+    add_token(&builder, &token);
+}
 %%
 
 #ifdef SCANNER_STANDALONE
