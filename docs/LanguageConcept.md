@@ -90,7 +90,7 @@ External types can be declared with size and alignment specified. They can only 
 
 ## Program Structure + Control Flow
 
-Functions, while loops, and `if` statements all work more-or-less how they would in C.
+Functions, `while` loops, and `if` statements all work more-or-less how they would in C.
 
 `foreach` loops can iterate over all elements in arrays.
 
