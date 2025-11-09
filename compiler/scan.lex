@@ -1,17 +1,14 @@
 %{
-#include <ctype.h>
-#include <stdio.h>
 #include <assert.h>
-#include <stdlib.h>
-#include <inttypes.h>
+#include <ctype.h>
 #include <errno.h>
+#include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "sized_string.h"
 #include "token.h"
-
-#define YY_DECL struct token_sequence yylex(void)
-#define yyterminate() return builder.sequence
 
 struct token_sequence_builder {
     struct token_sequence sequence;
@@ -21,8 +18,11 @@ struct token_sequence_builder {
 #ifdef SCANNER_STANDALONE
 static void debug_token(const Token *t) {
     char *lexeme = malloc(t->lexeme.len + 1);
-    if (!lexeme) abort();
-    memcpy(lexeme, t->lexeme.text, t->lexeme.len);
+    if (!lexeme) {
+        perror("Failed to allocate lexeme");
+        abort();
+    }
+    if (t->lexeme.len) memcpy(lexeme, t->lexeme.text, t->lexeme.len);
     char *nullfinder;
 
     while ((nullfinder = memchr(lexeme, 0, t->lexeme.len))) *nullfinder = '.';
@@ -68,7 +68,7 @@ static void debug_token(const Token *t) {
         "ARROW<line %zu, lexeme %s>\n",
         "SEMICOLON<line %zu, lexeme %s>\n",
         "COLON<line %zu, lexeme %s>\n",
-        "EQ_ASSIGN<line %zu, lexeme %s>\n",
+        "ASSIGN<line %zu, lexeme %s>\n",
         "COMMA<line %zu, lexeme %s>\n",
         "LOG_AND<line %zu, lexeme %s>\n",
         "LOG_OR<line %zu, lexeme %s>\n",
@@ -98,7 +98,7 @@ static void debug_token(const Token *t) {
         "INT_TOO_LARGE<line %zu, lexeme %s>\n",
         "BAD_BIT_LEN<line %zu, lexeme %s>\n",
         "UNPARSEABLE<line %zu, lexeme %s>\n",
-        "END<line %zu, lexeme %s>\n",
+        NULL /* SEQ_END */,
     };
 
     switch (t->type) {
@@ -141,6 +141,10 @@ static void debug_token(const Token *t) {
                 lexeme,
                 t->literal_i32.u
             );
+            break;
+        case SEQ_END:
+            printf("SEQ_END<line %zu>\n", t->line);
+            break;
         default:
             printf(TEMPLATES[t->type], t->line, lexeme);
     }
@@ -150,33 +154,31 @@ static void debug_token(const Token *t) {
 
 extern inline void destroy_token(Token);
 
-static bool add_token(
-    struct token_sequence_builder *builder, Token *token
-) {
-    assert(builder->sequence.ntokens <= builder->capacity);
-    assert(builder->sequence.ntokens < SIZE_MAX / 2);
-    if (builder->sequence.ntokens == builder->capacity) {
-        size_t new_capacity = builder->sequence.ntokens * 2;
-        if (new_capacity >= SIZE_MAX / sizeof(Token)) return false;
+static void add_token(struct token_sequence_builder *builder, Token *token) {
+    assert(builder->sequence.len <= builder->capacity);
+    if (builder->sequence.len == builder->capacity) {
+        size_t new_capacity = builder->sequence.len * 2;
+        if (new_capacity >= SIZE_MAX / sizeof(Token)) {
+            fputs("Not enough memory to build token sequence\n", stderr);
+            abort();
+        }
         Token *new_tokens =
-            realloc(builder->sequence.tokens, new_capacity * sizeof(Token));
-        if (!new_tokens) return false;
+            reallocarray(builder->sequence.tokens, new_capacity, sizeof(Token));
+        if (!new_tokens) {
+            perror("Failed to exend sequence token buffer");
+            abort();
+        }
         builder->capacity = new_capacity;
         builder->sequence.tokens = new_tokens;
     }
 
     memcpy(
-        &builder->sequence.tokens[builder->sequence.ntokens],
+        &builder->sequence.tokens[builder->sequence.len],
         token,
         sizeof(Token)
     );
-    builder->sequence.ntokens++;
-#ifdef SCANNER_STANDALONE
-    debug_token(token);
-#endif
-    return true;
+    builder->sequence.len++;
 }
-#define COMMON_STR(s) (String){.text = s, .len = sizeof(s) - 1 }
 
 [[gnu::returns_nonnull]]
 static void *checked_malloc(size_t size) {
@@ -190,8 +192,9 @@ static void *checked_malloc(size_t size) {
 
 // return a heap-allocated String containing a copy of the current text match
 static String current_lexeme(void) {
-    String str = {.text = checked_malloc(yyleng), .len = yyleng};
-    memcpy(str.text, yytext, yyleng);
+    String str = (String){
+        .len = yyleng, .text = memcpy(checked_malloc(yyleng), yytext, yyleng)
+    };
     return str;
 }
 
@@ -231,9 +234,27 @@ static void parse_int(Token *token, const char *start, int base) {
         token->type = RAW_INT, token->literal_i32.u = val;
     }
     return;
-    too_large:
-        token->type = INT_TOO_LARGE;
+too_large:
+    token->type = INT_TOO_LARGE;
 }
+
+static void finalize(struct token_sequence_builder *builder) {
+    assert(builder->sequence.len < SIZE_MAX - 1);
+
+    Token *addr = reallocarray(builder->sequence.tokens, builder->sequence.len + 1, sizeof(Token));
+    if (!addr) {
+        perror("Failed to shrink allocation of token sequence");
+        abort();
+    }
+    builder->sequence.tokens = addr;
+    builder->sequence.tokens[builder->sequence.len++] = (Token) {
+        .type = SEQ_END,
+        .line = yylineno,
+    };
+}
+
+#define YY_DECL struct token_sequence yylex(void)
+#define yyterminate() finalize(&builder); return builder.sequence
 
 %}
 
@@ -257,12 +278,16 @@ comment [/]{2}.*
 
 %%
     #define BASIC_TOKEN(t, l) \
-        token = (Token) {.lexeme = COMMON_STR(l), .type = t, .line = yylineno }; \
+        token = (Token){ \
+            .lexeme = (String){.text = l, .len = sizeof(l) - 1}, \
+            .type = t, \
+            .line = yylineno, \
+        }; \
         add_token(&builder, &token);
     struct token_sequence_builder builder = (struct token_sequence_builder){
         .sequence = (struct token_sequence){
+            .len = 0,
             .tokens = checked_malloc(sizeof(Token)),
-            .ntokens = 0
         },
         .capacity = 1
     };
@@ -405,7 +430,7 @@ comment [/]{2}.*
 
 ";" { BASIC_TOKEN(SEMICOLON, ";"); }
 ":" { BASIC_TOKEN(COLON, ":"); }
-"=" { BASIC_TOKEN(EQ_ASSIGN, "="); }
+"=" { BASIC_TOKEN(ASSIGN, "="); }
 ">>" { BASIC_TOKEN(SHR_LOG, ">>"); }
 "@>>" { BASIC_TOKEN(SHR_ARITH, "@>>"); }
 "<<" { BASIC_TOKEN(SHL, "<<"); }
@@ -429,6 +454,13 @@ int main(int argc, char **argv) {
     if (!argc) return EXIT_FAILURE;
     ++argv, --argc;
     yyin = argc ? fopen(argv[0], "r") : stdin;
-    yylex();
+    struct token_sequence tokens = yylex();
+    for (size_t i = 0; i < tokens.len; ++i) {
+        debug_token(&tokens.tokens[i]);
+        destroy_token(tokens.tokens[i]);
+    }
+    if (argc) fclose(yyin);
+    yylex_destroy();
+    free(tokens.tokens);
 }
 #endif

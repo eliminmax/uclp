@@ -100,7 +100,7 @@ enum token_type : uint8_t {
     // ":"
     COLON,
     // standalone "="
-    EQ_ASSIGN,
+    ASSIGN,
     // ","
     COMMA,
 
@@ -161,13 +161,12 @@ enum token_type : uint8_t {
     // Generic unparsable token
     UNPARSEABLE,
 
-    END,
+    SEQ_END,
 };
 
 typedef struct token {
     String lexeme;
     size_t line;
-
     union {
         ucl_i64 literal_i64;
         ucl_i32 literal_i32;
@@ -184,8 +183,8 @@ inline void destroy_token(Token t) {
 }
 
 struct token_sequence {
-    Token *_Nonnull tokens;
-    size_t ntokens;
+    size_t len;
+    Token *_Nonnull tokens [[clang::counted_by(len)]];
 };
 
 struct token_sequence tokenize(size_t len, const char source[_Nonnull len]);

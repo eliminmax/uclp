@@ -9,8 +9,8 @@
 #include <stddef.h>
 
 typedef struct {
-    char *_Nonnull text;
     size_t len;
+    char *_Nonnull text [[clang::counted_by(len)]];
 } String;
 
 #endif /* SIZED_STRING_H */
