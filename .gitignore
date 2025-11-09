@@ -4,3 +4,8 @@
 
 build/
 .cache/
+a.out
+*.o
+
+# Generated source files
+compiler/lex.yy.c
