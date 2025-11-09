@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 #include "sized_string.h"
-#include "ucl_nums.h"
+#include "lang/types.h"
 
 enum token_type : uint8_t {
 #define DEFINE_TOKENS
