@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+ *
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
 #include <stdint.h>
 #ifdef DEFINE_TOKENS
 #define TOKEN(T, fmt, ...) T,

@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+ *
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
 #ifndef TOKEN_H
 #define TOKEN_H
 #include <stdint.h>

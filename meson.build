@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
 project('uclp', 'c',
   version : '0.1',
   default_options : ['c_std=gnu23', 'warning_level=3'])
