@@ -237,10 +237,9 @@ static void parse_int(Token *token, const char *start, int base) {
 
 %}
 
-%option noyywrap
-%option yylineno
-%option nodefault
+%option noyywrap yylineno nodefault
 %pointer
+
 whitespace [ \n\t]+
 
 escaped_char \\[ntr'\"\\]|\\x[0-8a-f]{2}|\\[0-3]?([0-7]{1,2})
