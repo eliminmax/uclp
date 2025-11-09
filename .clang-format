@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+#
+# SPDX-License-Identifier: 0BSD
+#
+# originally generated with https://clang-format-configurator.site/, targeting
+# clang-format version 16, since upgraded by hand. Currently targets version 19.
+
+---
+BasedOnStyle: Google
+AlignAfterOpenBracket: BlockIndent
+AlignConsecutiveBitFields:
+  Enabled: true
+  AcrossComments: true
+  PadOperators: true
+AlignEscapedNewlines: DontAlign
+AlignTrailingComments:
+  Kind: Never
+AllowShortBlocksOnASingleLine: Always
+AllowShortFunctionsOnASingleLine: None
+BinPackArguments: false
+BinPackParameters: false
+BitFieldColonSpacing: After
+BreakBeforeTernaryOperators: false
+DeriveLineEnding: false
+DerivePointerAlignment: false
+IncludeCategories:
+  - Regex: ^<\(std.*\|string\|limits\|inttypes\)*\.h>
+    Priority: 2
+    SortPriority: 0
+  - Regex: ^<.*\.h>
+    Priority: 1
+    SortPriority: 1
+  - Regex: '".*.h"'
+    Priority: 2
+    SortPriority: 0
+  - Regex: .*
+    Priority: 3
+    SortPriority: 0
+    CaseSensitive: false
+IndentWidth: 4
+InsertNewlineAtEOF: true
+InsertTrailingCommas: Wrapped
+LineEnding: LF
+Macros:
+  # not actual definitions, but works for formatting
+  - BASIC_FORMAT(T)=T;
+  - FORMAT(T)=T;
+PenaltyBreakBeforeFirstCallParameter: 0
+PenaltyReturnTypeOnItsOwnLine: 10000
+PointerAlignment: Right
+SeparateDefinitionBlocks: Always
+SpacesBeforeTrailingComments: 1
+TabWidth: 4
