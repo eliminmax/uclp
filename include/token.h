@@ -187,6 +187,11 @@ struct token_sequence {
     Token *_Nonnull tokens [[clang::counted_by(len)]];
 };
 
+inline void destroy_token_sequence(struct token_sequence seq) {
+    for (size_t i = 0; i < seq.len; ++i) destroy_token(seq.tokens[i]);
+    free(seq.tokens);
+}
+
 struct token_sequence tokenize(size_t len, const char source[_Nonnull len]);
 
 #endif /* TOKEN_H */

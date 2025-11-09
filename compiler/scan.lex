@@ -153,6 +153,7 @@ static void debug_token(const Token *t) {
 #endif
 
 extern inline void destroy_token(Token);
+extern inline void destroy_token_sequence(struct token_sequence);
 
 static void add_token(struct token_sequence_builder *builder, Token *token) {
     assert(builder->sequence.len <= builder->capacity);
@@ -455,12 +456,9 @@ int main(int argc, char **argv) {
     ++argv, --argc;
     yyin = argc ? fopen(argv[0], "r") : stdin;
     struct token_sequence tokens = yylex();
-    for (size_t i = 0; i < tokens.len; ++i) {
-        debug_token(&tokens.tokens[i]);
-        destroy_token(tokens.tokens[i]);
-    }
+    for (size_t i = 0; i < tokens.len; ++i) debug_token(&tokens.tokens[i]);
     if (argc) fclose(yyin);
+    destroy_token_sequence(tokens);
     yylex_destroy();
-    free(tokens.tokens);
 }
 #endif
