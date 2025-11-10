@@ -6,6 +6,7 @@
  * C representations of UCL types
  */
 
+#include <stddef.h>
 #include <stdint.h>
 
 // A union which represents an 8-bit sign-agnostic integer
@@ -39,3 +40,57 @@ typedef union {
     // value as unsigned integer
     uint64_t u;
 } ucl_i64;
+
+// A struct which represents a pointer to the underlying type
+struct ucl_pointer {
+    struct ucl_type *_Nullable pointee_type;
+
+    enum  {
+        PTR_ALIGN_DYNAMIC = 0,
+        PTR_ALIGN_8 = 8,
+        PTR_ALIGN_16 = 16,
+        PTR_ALIGN_32 = 32,
+        PTR_ALIGN_64 = 64
+    } alignment;
+};
+
+// a struct which represents an opaque type's size and alignment
+struct ucl_opaque_type {
+    size_t size;
+    enum {
+        OPAQUE_ALIGN_8 = 8,
+        OPAQUE_ALIGN_16 = 16,
+        OPAQUE_ALIGN_32 = 32,
+        OPAQUE_ALIGN_64 = 64
+    } alignment;
+};
+
+// a struct which represents an array's type and length
+struct ucl_array {
+    struct ucl_type *_Nonnull member_type;
+    size_t len;
+};
+
+// A tagged union representing a type and its metadata
+typedef struct ucl_type {
+    enum : uint8_t {
+        TYPE_POINTER,
+        TYPE_OPAQUE,
+        TYPE_I8,
+        TYPE_I16,
+        TYPE_I32,
+        TYPE_I64,
+        TYPE_ARRAY
+    } tag;
+
+    union {
+        struct ucl_pointer ptr;
+        struct ucl_opaque_type opaque;
+        struct ucl_array array;
+
+        ucl_i8 val8;
+        ucl_i16 val16;
+        ucl_i32 val32;
+        ucl_i64 val64;
+    };
+} UCLType;
