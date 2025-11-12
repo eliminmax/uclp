@@ -20,3 +20,14 @@ CompileFlags:
     # include the repo-level include dir
     - "-I./include"
   Compiler: clang
+
+---
+
+If:
+  PathMatch: .*\.h
+CompileFlags:
+  Remove:
+    - "-xc"
+  Add:
+    - "-xc-header"
+
