@@ -16,19 +16,20 @@ incdir = include_directories('include')
 
 lex = find_program('flex', 'lex')
 lex_yy_c = custom_target('lex.yy.c',
-  output: 'lex.yy.c',
-  input: 'compiler/scan.lex',
-  command: [lex, '-o@OUTPUT@', '@INPUT@', ],
+  output : 'lex.yy.c',
+  input : 'compiler/scan.lex',
+  command : [lex, '-o@OUTPUT@', '@INPUT@', ],
 )
 
 executable('uclp_scanner',
   lex_yy_c,
   include_directories : incdir,
   c_args : ['-DSCANNER_STANDALONE'],
-  install : false
+  install : false,
 )
 
 executable('ucf_loader',
-           'loader/ucf_loader.c',
-           include_directories: incdir,
-           install : true)
+  'loader/ucf_loader.c',
+  include_directories: incdir,
+  install : true,
+)
