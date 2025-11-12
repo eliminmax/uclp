@@ -1,0 +1,54 @@
+/*
+ * SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+ *
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+#include <stdio.h>
+
+/* The format of a binfmt entry is as follows:
+ *
+ * :name:type:offset:magic:mask:interpreter:flags
+ *
+ * The name field cannot have slashes, as it's used as a filename within procfs
+ *
+ * The type field has 2 valid values:
+ *  - "M" for formats identified via magic bytes
+ *  - "E" for formats identified via file extension
+ *
+ * The offset field is the byte offset of the magic bytes within the file. If
+ *  it's empty, it defaults to zero.
+ *
+ * The magic field is either the magic bytes with hex escaping, or the file
+ *  extension without escaping or slashes, and without the leading dot.
+ *
+ * The mask field is a bitmask to apply to the magic bytes. If unset, defaults
+ *  to including all bits.
+ *
+ * The interpreter field is the absolute path of the program to use to run
+ *  the binaries.
+ *
+ * The flags field can have one or more letters that modify how the program is
+ *  loaded, none of which are needed for this.
+ *
+ * For more of an explanation of various fields, see
+ * https://www.kernel.org/doc/html/latest/admin-guide/binfmt-misc.html */
+
+static const char BINFMT_ENTRY[] = ":ucf:M::\\xf8UCF::@INTERP@:";
+// make sure that once @INTERP@ is replaced by the fully-resolved path,
+static_assert(sizeof(BINFMT_ENTRY) - 1 <= 1920);
+
+int main() {
+    int separators = 0;
+    for (const char *c = BINFMT_ENTRY; *c; ++c) {
+        if (*c == ':') ++separators;
+    }
+    if (separators != 7) {
+        fputs(
+            "Too many separators - "
+            "interpreter's path must not have literal ':'\n",
+            stderr
+        );
+        return 1;
+    }
+    puts(BINFMT_ENTRY);
+}

@@ -33,3 +33,28 @@ executable('ucf_loader',
   include_directories: incdir,
   install : true,
 )
+
+loader_path = get_option('prefix') / get_option('libexecdir') / 'ucf_loader'
+# This really should be done in a much simpler way, but meson custom_targets don't play
+# nice with backslashes.
+#
+# If they did, command could be `['printf', ':ucf:M::\\xf8UCF::%s::\n', loader_path]`
+#
+# See https://github.com/mesonbuild/meson/issues/1564
+custom_target('binfmt:ucf.conf',
+  command : executable('gen_binfmt',
+    configure_file(
+      output : 'gen_binfmt.c',
+      input : 'resources/gen_binfmt.c.in',
+      configuration: {
+        'INTERP' : loader_path
+      },
+      install : false,
+    ),
+    install : false
+  ),
+  output: 'ucf.conf',
+  install_dir: '/etc/binfmt.d/',
+  install: true,
+  capture: true,
+)
