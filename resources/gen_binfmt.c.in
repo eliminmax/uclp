@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 #include <stdio.h>
+#include <string.h>
 
 /* The format of a binfmt entry is as follows:
  *
@@ -32,22 +33,15 @@
  *
  * For more of an explanation of various fields, see
  * https://www.kernel.org/doc/html/latest/admin-guide/binfmt-misc.html */
-
 static const char BINFMT_ENTRY[] = ":ucf:M::\\xf8UCF::@INTERP@:";
-// make sure that once @INTERP@ is replaced by the fully-resolved path,
+
+// make sure that once @INTERP@ is replaced by the fully-resolved path, it's
+// still within the maximum size of 1920 listed in the admin-guide linked above
 static_assert(sizeof(BINFMT_ENTRY) - 1 <= 1920);
 
 int main() {
-    int separators = 0;
-    for (const char *c = BINFMT_ENTRY; *c; ++c) {
-        if (*c == ':') ++separators;
-    }
-    if (separators != 7) {
-        fputs(
-            "Too many separators - "
-            "interpreter's path must not have literal ':'\n",
-            stderr
-        );
+    if (strchr("@INTERP@", ':')) {
+        fputs("interpreter's path must not have literal ':'\n", stderr);
         return 1;
     }
     puts(BINFMT_ENTRY);
