@@ -336,6 +336,9 @@ int main(int argc, char **argv) {
         while ((p = memchr(lexeme, 0, TOK.lexeme.len))) *p = '.';
         lexeme[TOK.lexeme.len] = '\0';
 
+        // if included here after defining DEBUG_TOKENS, this header will match
+        // the valid tag values for tokens to the proper invocation of printf to
+        // print representations of their values
 #define DEBUG_TOKENS
 #include "lang/tokens.h"
         free(lexeme);
