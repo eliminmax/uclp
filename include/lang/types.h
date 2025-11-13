@@ -86,6 +86,8 @@ typedef struct ucl_type {
         TYPE_ARRAY
     } tag;
 
+    enum : uint8_t { STORAGE_STACK, STORAGE_STATIC } storage;
+
     union {
         struct ucl_pointer ptr;
         struct ucl_opaque_type opaque;
