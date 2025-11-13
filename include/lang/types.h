@@ -6,6 +6,9 @@
  * C representations of UCL types
  */
 
+#ifndef UCLP_TYPES_H
+#define UCLP_TYPES_H
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -94,3 +97,5 @@ typedef struct ucl_type {
         ucl_i64 val64;
     };
 } UCLType;
+
+#endif /* UCLP_TYPES_H */
