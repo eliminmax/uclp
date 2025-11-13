@@ -14,7 +14,8 @@ endif
 
 incdir = include_directories('include')
 
-lex = find_program('flex', 'lex')
+# need flex specifically to generate a reentrant parser
+lex = find_program('flex')
 lex_yy_c = custom_target('lex.yy.c',
   output : 'lex.yy.c',
   input : 'compiler/scan.lex',

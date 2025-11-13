@@ -4,11 +4,15 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
+%option noyywrap yylineno nodefault reentrant
+%pointer
+
 %{
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -62,54 +66,12 @@ static void *checked_malloc(size_t size) {
     return ptr;
 }
 
+
 // return a heap-allocated String containing a copy of the current text match
-static String current_lexeme(void) {
-    String str = (String){
-        .len = yyleng, .text = memcpy(checked_malloc(yyleng), yytext, yyleng)
-    };
-    return str;
-}
-
-static void parse_int(Token *token, const char *start, int base) {
-    char *end;
-    token->_should_free = true;
-    token->lexeme = current_lexeme();
-    token->line = yylineno;
-    unsigned long long val = strtoull(start, &end, base);
-    if (*end == '#') {
-        errno = 0;
-        unsigned long long bit_len = strtoll(&end[1], NULL, 10);
-        if (errno) bit_len = 0;
-        switch (bit_len) {
-            case 8:
-                if (val > UINT8_MAX) goto too_large;
-                token->type = LITERAL_INT8, token->literal_i8.u = val;
-                break;
-            case 16:
-                if (val > UINT16_MAX) goto too_large;
-                token->type = LITERAL_INT16, token->literal_i16.u = val;
-                break;
-            case 32:
-                if (val > UINT32_MAX) goto too_large;
-                token->type = LITERAL_INT32, token->literal_i32.u = val;
-                break;
-            case 64:
-                if (val > UINT64_MAX) goto too_large;
-                token->type = LITERAL_INT64, token->literal_i64.u = val;
-                break;
-                break;
-            default:
-                token->type = BAD_BIT_LEN;
-        }
-    } else {
-        if (val > UINT32_MAX) goto too_large;
-        token->type = RAW_INT, token->literal_i32.u = val;
-    }
-    return;
-too_large:
-    token->type = INT_TOO_LARGE;
-}
-
+static String current_lexeme(yyscan_t scanner);
+// parse an integer value from the current lexeme
+static void parse_int(Token *token, const char *start, int base, yyscan_t scanner);
+// shrink the builder's allocation down, and add the END token
 static void finalize(struct token_sequence_builder *builder) {
     assert(builder->sequence.len < SIZE_MAX - 1);
 
@@ -121,17 +83,14 @@ static void finalize(struct token_sequence_builder *builder) {
     builder->sequence.tokens = addr;
     builder->sequence.tokens[builder->sequence.len++] = (Token) {
         .type = SEQ_END,
-        .line = yylineno,
     };
+    builder->capacity = builder->sequence.len;
 }
 
-#define YY_DECL struct token_sequence yylex(void)
-#define yyterminate() finalize(&builder); return builder.sequence
+#define YY_DECL void yylex(struct token_sequence_builder *builder, yyscan_t yyscanner)
+#define yyterminate() finalize(builder); return
 
 %}
-
-%option noyywrap yylineno nodefault
-%pointer
 
 whitespace [ \n\t]+
 
@@ -149,21 +108,14 @@ ident [_a-zA-Z][_0-9a-zA-Z]*
 comment [/]{2}.*
 
 %%
+    Token token;
     #define BASIC_TOKEN(t, l) \
         token = (Token){ \
             .lexeme = (String){.text = l, .len = sizeof(l) - 1}, \
             .type = t, \
             .line = yylineno, \
         }; \
-        add_token(&builder, &token);
-    struct token_sequence_builder builder = (struct token_sequence_builder){
-        .sequence = (struct token_sequence){
-            .len = 0,
-            .tokens = checked_malloc(sizeof(Token)),
-        },
-        .capacity = 1
-    };
-    Token token;
+        add_token(builder, &token);
 
 {whitespace}
 
@@ -183,11 +135,11 @@ comment [/]{2}.*
 {ident} {
     token = (Token){
         .type = LITERAL_IDENT,
-        .lexeme = current_lexeme(), 
+        .lexeme = current_lexeme(yyscanner),
         .line = yylineno,
         ._should_free = true,
     };
-    add_token(&builder, &token);
+    add_token(builder, &token);
 }
 
 {char_literal} {
@@ -214,38 +166,38 @@ comment [/]{2}.*
         val = *s;
     }
     token = (Token) {
-        .lexeme = current_lexeme(),
+        .lexeme = current_lexeme(yyscanner),
         .type = LITERAL_INT8,
         .line = yylineno,
         .literal_i8 = (ucl_i8){.s = val},
         ._should_free = true,
     };
-    add_token(&builder, &token);
+    add_token(builder, &token);
 }
 
 {string_literal} {
     token = (Token){
         .type = LITERAL_STR,
-        .lexeme = current_lexeme(), 
+        .lexeme = current_lexeme(yyscanner),
         .line = yylineno,
         ._should_free = true,
     };
-    add_token(&builder, &token);
+    add_token(builder, &token);
 }
 
-{dec_literal} { parse_int(&token, yytext, 10); add_token(&builder, &token); }
-{hex_literal} { parse_int(&token, yytext + 2, 16); add_token(&builder, &token); }
-{oct_literal} { parse_int(&token, yytext + 2, 8); add_token(&builder, &token); }
-{bin_literal} { parse_int(&token, yytext + 2, 2); add_token(&builder, &token); }
+{dec_literal} { parse_int(&token, yytext, 10, yyscanner); add_token(builder, &token); }
+{hex_literal} { parse_int(&token, yytext + 2, 16, yyscanner); add_token(builder, &token); }
+{oct_literal} { parse_int(&token, yytext + 2, 8, yyscanner); add_token(builder, &token); }
+{bin_literal} { parse_int(&token, yytext + 2, 2, yyscanner); add_token(builder, &token); }
 
 {comment} {
     token = (Token){
         .type = COMMENT,
         .line = yylineno,
         ._should_free = true,
-        .lexeme = current_lexeme(),
+        .lexeme = current_lexeme(yyscanner),
     };
-    add_token(&builder, &token);
+    add_token(builder, &token);
 }
 
 "/*"([^/]|[^*][/])*"*/" {
@@ -253,9 +205,9 @@ comment [/]{2}.*
         .type = BLOCK_COMMENT,
         .line = yylineno,
         ._should_free = true,
-        .lexeme = current_lexeme(),
+        .lexeme = current_lexeme(yyscanner),
     };
-    add_token(&builder, &token);
+    add_token(builder, &token);
 }
 
 "[" { BASIC_TOKEN(L_SQUARE, "["); }
@@ -315,9 +267,9 @@ comment [/]{2}.*
         .type = UNPARSEABLE,
         .line = yylineno,
         ._should_free = true,
-        .lexeme = current_lexeme(),
+        .lexeme = current_lexeme(yyscanner),
     };
-    add_token(&builder, &token);
+    add_token(builder, &token);
 }
 %%
 
@@ -325,10 +277,32 @@ comment [/]{2}.*
 int main(int argc, char **argv) {
     if (!argc) return EXIT_FAILURE;
     ++argv, --argc;
-    yyin = argc ? fopen(argv[0], "r") : stdin;
-    struct token_sequence tokens = yylex();
-    for (size_t i = 0; i < tokens.len; ++i) {
-#define TOK tokens.tokens[i]
+    yyscan_t scanner;
+    yylex_init(&scanner);
+
+    FILE *in;
+    if (argc) {
+        in = fopen(argv[0], "r");
+        if (!in) {
+            perror("Failed to open file");
+            return EXIT_FAILURE;
+        }
+        yyset_in(in, scanner);
+    }
+    struct token_sequence_builder builder = (struct token_sequence_builder){
+        .sequence =
+            (struct token_sequence){
+                .len = 0,
+                .tokens = checked_malloc(sizeof(Token)),
+            },
+        .capacity = 1
+    };
+    yylex(&builder, scanner);
+    if (argc) fclose(in);
+    yylex_destroy(scanner);
+
+    for (size_t i = 0; i < builder.sequence.len; ++i) {
+#define TOK builder.sequence.tokens[i]
         char *lexeme = checked_malloc(TOK.lexeme.len + 1);
         memcpy(lexeme, TOK.lexeme.text, TOK.lexeme.len);
         char *p;
@@ -341,11 +315,86 @@ int main(int argc, char **argv) {
         // print representations of their values
 #define DEBUG_TOKENS
 #include "lang/tokens.h"
-        free(lexeme);
 #undef TOK
+        free(lexeme);
     }
-    if (argc) fclose(yyin);
-    destroy_token_sequence(tokens);
-    yylex_destroy();
+    destroy_token_sequence(builder.sequence);
+}
+
+#else
+
+struct token_sequence tokenize(size_t len, const char source[_Nonnull len]) {
+    yyscan_t scanner;
+    yylex_init(&scanner);
+    if (len > INT_MAX - 2) {
+        fputs("Source buffer too large for lex-generated parser\n", stderr);
+        exit(EXIT_FAILURE);
+    }
+    yy_scan_bytes(source, len, scanner);
+
+    struct token_sequence_builder builder = (struct token_sequence_builder){
+        .sequence =
+            (struct token_sequence){
+                .len = 0,
+                .tokens = checked_malloc(sizeof(Token)),
+            },
+        .capacity = 1
+    };
+
+    yylex_destroy(scanner);
+    return builder.sequence;
 }
 #endif
+
+static String current_lexeme(yyscan_t scanner) {
+    int len = yyget_leng(scanner);
+    assert(len >= 0);
+
+    String str = (String){
+        .len = len,
+        .text = memcpy(checked_malloc(len), yyget_text(scanner), len),
+    };
+    return str;
+}
+
+static void parse_int(
+    Token *token, const char *start, int base, yyscan_t scanner
+) {
+    char *end;
+    token->_should_free = true;
+    token->lexeme = current_lexeme(scanner);
+    token->line = yyget_lineno(scanner);
+    unsigned long long val = strtoull(start, &end, base);
+    if (*end == '#') {
+        errno = 0;
+        unsigned long long bit_len = strtoll(&end[1], NULL, 10);
+        if (errno) bit_len = 0;
+        switch (bit_len) {
+            case 8:
+                if (val > UINT8_MAX) goto too_large;
+                token->type = LITERAL_INT8, token->literal_i8.u = val;
+                break;
+            case 16:
+                if (val > UINT16_MAX) goto too_large;
+                token->type = LITERAL_INT16, token->literal_i16.u = val;
+                break;
+            case 32:
+                if (val > UINT32_MAX) goto too_large;
+                token->type = LITERAL_INT32, token->literal_i32.u = val;
+                break;
+            case 64:
+                if (val > UINT64_MAX) goto too_large;
+                token->type = LITERAL_INT64, token->literal_i64.u = val;
+                break;
+                break;
+            default:
+                token->type = BAD_BIT_LEN;
+        }
+    } else {
+        if (val > UINT32_MAX) goto too_large;
+        token->type = RAW_INT, token->literal_i32.u = val;
+    }
+    return;
+too_large:
+    token->type = INT_TOO_LARGE;
+}
