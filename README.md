@@ -56,3 +56,4 @@ ALL INFORMATION IN THIS DOCUMENT IS PROVISIONAL AND SUBJECT TO CHANGE. THIS REPO
 Ideas that may or may not become goals in the future
 * File I/O (yes, everything is a file, but you know what I mean by this).
 * Support for FFI on non-`glibc` Linux systems
+* Support for Linux system calls as functions
