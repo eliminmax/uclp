@@ -49,9 +49,7 @@ static void add_token(struct token_sequence_builder *builder, Token *token) {
     }
 
     memcpy(
-        &builder->sequence.tokens[builder->sequence.len],
-        token,
-        sizeof(Token)
+        &builder->sequence.tokens[builder->sequence.len], token, sizeof(Token)
     );
     builder->sequence.len++;
 }
@@ -66,30 +64,36 @@ static void *checked_malloc(size_t size) {
     return ptr;
 }
 
-
 // return a heap-allocated String containing a copy of the current text match
 static String current_lexeme(yyscan_t scanner);
 // parse an integer value from the current lexeme
-static void parse_int(Token *token, const char *start, int base, yyscan_t scanner);
+static void parse_int(
+    Token *token, const char *start, int base, yyscan_t scanner
+);
+
 // shrink the builder's allocation down, and add the END token
 static void finalize(struct token_sequence_builder *builder) {
     assert(builder->sequence.len < SIZE_MAX - 1);
 
-    Token *addr = reallocarray(builder->sequence.tokens, builder->sequence.len + 1, sizeof(Token));
+    Token *addr = reallocarray(
+        builder->sequence.tokens, builder->sequence.len + 1, sizeof(Token)
+    );
     if (!addr) {
         perror("Failed to shrink allocation of token sequence");
         abort();
     }
     builder->sequence.tokens = addr;
-    builder->sequence.tokens[builder->sequence.len++] = (Token) {
+    builder->sequence.tokens[builder->sequence.len++] = (Token){
         .type = SEQ_END,
     };
     builder->capacity = builder->sequence.len;
 }
 
-#define YY_DECL void yylex(struct token_sequence_builder *builder, yyscan_t yyscanner)
-#define yyterminate() finalize(builder); return
-
+#define YY_DECL \
+    void yylex(struct token_sequence_builder *builder, yyscan_t yyscanner)
+#define yyterminate() \
+    finalize(builder); \
+    return
 %}
 
 whitespace [ \n\t]+

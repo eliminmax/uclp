@@ -12,13 +12,12 @@
 #define UCF_MAGIC "\xf8UCF"
 #define UCF_VERSION_DEV 0
 
-#if ! __has_c_attribute(gnu::packed)
+#if !__has_c_attribute(gnu::packed)
 #error "Missing required GNU struct attribute packed"
 #endif
-#if ! __has_c_attribute(gnu::aligned)
+#if !__has_c_attribute(gnu::aligned)
 #error "Missing required GNU struct attribute aligned"
 #endif
-
 
 typedef struct [[gnu::packed]] [[gnu::aligned(8)]] {
     // magic bytes identifying the file type - must be set to UCF_MAGIC

@@ -13,7 +13,6 @@
 #error "C23 additions required"
 #endif
 
-
 #include <assert.h>
 #include <dlfcn.h>
 #include <fcntl.h>

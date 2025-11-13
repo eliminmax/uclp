@@ -9,18 +9,20 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "sized_string.h"
 #include "lang/types.h"
+#include "sized_string.h"
 
 enum token_type : uint8_t {
+
 #define DEFINE_TOKENS
-    #include "lang/tokens.h"
+#include "lang/tokens.h"
 #undef DEFINE_TOKENS
 };
 
 typedef struct token {
     String lexeme;
     size_t line;
+
     union {
         ucl_i64 literal_i64;
         ucl_i32 literal_i32;

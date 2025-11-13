@@ -48,7 +48,7 @@ typedef union {
 struct ucl_pointer {
     struct ucl_type *_Nullable pointee_type;
 
-    enum  {
+    enum {
         PTR_ALIGN_DYNAMIC = 0,
         PTR_ALIGN_8 = 8,
         PTR_ALIGN_16 = 16,
@@ -60,6 +60,7 @@ struct ucl_pointer {
 // a struct which represents an opaque type's size and alignment
 struct ucl_opaque_type {
     size_t size;
+
     enum {
         OPAQUE_ALIGN_8 = 8,
         OPAQUE_ALIGN_16 = 16,
