@@ -18,6 +18,7 @@ SPDX-License-Identifier: 0BSD
     * [Comments](#comments)
     * [Integer Literals](#integer-literals)
     * [Variable Declarations](#variable-declarations)
+        * [Static Variables](#static-variables)
     * [Function Declarations](#function-declarations)
     * [Conditionals](#conditionals)
     * [While Loop](#while-loop)
@@ -139,6 +140,10 @@ let NAME: TYPE;
 let NAME = VALUE;
 let NAME: TYPE = VALUE;
 ```
+
+#### Static Variables
+
+Variables with static storage scopes can be declared by replacing `let` with `static` in the declaration.
 
 ### Function Declarations
 

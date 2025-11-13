@@ -131,6 +131,8 @@ SIMPLE_TOKEN(SIGNED_CAST)
 // keyword tokens
 // "let"
 SIMPLE_TOKEN(KW_LET)
+// "static"
+SIMPLE_TOKEN(KW_STATIC)
 // "func"
 SIMPLE_TOKEN(KW_FUNC)
 // "if"
