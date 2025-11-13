@@ -30,12 +30,12 @@ executable('uclp_scanner',
 )
 
 executable('ucf_loader',
-  'loader/ucf_loader.c',
+  'resources/ucf_loader.c',
   include_directories: incdir,
   install : true,
 )
 
-loader_path = get_option('prefix') / get_option('libexecdir') / 'ucf_loader'
+loader_path = get_option('prefix') / get_option('bindir') / 'ucf_loader'
 # This really should be done in a much simpler way, but meson custom_targets don't play
 # nice with backslashes.
 #
