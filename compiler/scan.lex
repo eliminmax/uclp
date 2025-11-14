@@ -124,7 +124,7 @@ comment [/]{2}.*
 {whitespace}
 
 "let" { BASIC_TOKEN(KW_LET, "let"); }
-"static" { BASIC_TOKEN(KW_STATIC "static"); }
+"static" { BASIC_TOKEN(KW_STATIC, "static"); }
 "func" { BASIC_TOKEN(KW_FUNC, "func"); }
 "if" { BASIC_TOKEN(KW_IF, "if"); }
 "elif" { BASIC_TOKEN(KW_ELIF, "elif"); }
