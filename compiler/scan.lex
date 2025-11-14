@@ -19,6 +19,7 @@
 
 #include "sized_string.h"
 #include "token.h"
+#include "alloc.h"
 
 struct token_sequence_builder {
     struct token_sequence sequence;
@@ -52,16 +53,6 @@ static void add_token(struct token_sequence_builder *builder, Token *token) {
         &builder->sequence.tokens[builder->sequence.len], token, sizeof(Token)
     );
     builder->sequence.len++;
-}
-
-[[gnu::returns_nonnull]]
-static void *checked_malloc(size_t size) {
-    void *ptr = malloc(size);
-    if (!ptr) {
-        perror("memory allocation failed");
-        abort();
-    }
-    return ptr;
 }
 
 // return a heap-allocated String containing a copy of the current text match

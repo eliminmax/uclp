@@ -24,6 +24,7 @@ lex_yy_c = custom_target('lex.yy.c',
 
 executable('uclp_scanner',
   lex_yy_c,
+  'compiler/alloc.c',
   include_directories : incdir,
   c_args : ['-DSCANNER_STANDALONE'],
   install : false,

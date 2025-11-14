@@ -1,0 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+ *
+ * SPDX-License-Identifier: 0BSD
+ */
+
+#define ALLOC_HOME
+#include "alloc.h"
