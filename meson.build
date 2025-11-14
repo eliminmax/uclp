@@ -60,3 +60,12 @@ custom_target('binfmt:ucf.conf',
   install: true,
   capture: true,
 )
+
+executable('uclpc',
+  lex_yy_c,
+  'compiler/hash.c',
+  'compiler/alloc.c',
+  'compiler/main.c',
+  include_directories : incdir,
+  install: true,
+)
