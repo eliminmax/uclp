@@ -14,7 +14,7 @@ typedef struct hash_table *_Nonnull HashTable;
 
 // A cleanup callback for use when removing entries with ht_clear, or
 // deallocating a table with ht_cleanup
-typedef void (*_Nullable ht_cleanup_callback)(void *_Nonnull);
+typedef void (*_Nullable HTEntryCleanupFn)(void *_Nonnull);
 
 // create a new HashTable
 HashTable ht_create();
@@ -22,10 +22,10 @@ HashTable ht_create();
 // clean up a HashTable, freeing its internal allocations then freeing it
 // itself. Second argument is a callback function to clean up the entries - e.g.
 // if they need to be `free`d, `free` would be an appropriate choice.
-void ht_cleanup(HashTable, ht_cleanup_callback);
+void ht_cleanup(HashTable, HTEntryCleanupFn);
 
 // clear all entries within the table, leaving the table intact for future use
-void ht_clear(HashTable, ht_cleanup_callback);
+void ht_clear(HashTable, HTEntryCleanupFn);
 
 // look up the provided String in the HashTable. Return the matched value if
 // found, otherwise returns NULL

@@ -3,14 +3,13 @@
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
-#include "hash.h"
-
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "alloc.h"
+#include "hash.h"
 #include "sized_string.h"
 
 #define STRING_DUP(s) \
@@ -55,7 +54,7 @@ HashTable ht_create() {
     return table;
 }
 
-void ht_clear(struct hash_table *table, ht_cleanup_callback callback) {
+void ht_clear(struct hash_table *table, HTEntryCleanupFn callback) {
     for (size_t i = 0; i < table->cap; ++i) {
         if (table->entries[i].occupied) {
             if (callback) callback(table->entries[i].data);
@@ -66,7 +65,7 @@ void ht_clear(struct hash_table *table, ht_cleanup_callback callback) {
     table->len = 0;
 }
 
-void ht_cleanup(struct hash_table *table, ht_cleanup_callback callback) {
+void ht_cleanup(struct hash_table *table, HTEntryCleanupFn callback) {
     ht_clear(table, callback);
     free(table->entries);
     free(table);
