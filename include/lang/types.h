@@ -77,7 +77,7 @@ struct ucl_array {
 
 // A tagged union representing a type and its metadata
 typedef struct ucl_type {
-    enum : uint8_t {
+    enum ucl_type_tag: uint8_t {
         TYPE_POINTER,
         TYPE_OPAQUE,
         TYPE_I8,
@@ -93,11 +93,6 @@ typedef struct ucl_type {
         struct ucl_pointer ptr;
         struct ucl_opaque_type opaque;
         struct ucl_array array;
-
-        ucl_i8 val8;
-        ucl_i16 val16;
-        ucl_i32 val32;
-        ucl_i64 val64;
     };
 } UCLType;
 
