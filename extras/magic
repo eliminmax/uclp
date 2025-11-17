@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+# 
+# SPDX-License-Identifier: 0BSD
+
+# append the following line to /etc/magic to allow file(1) to properly detect
+# UCF binaries
+0	ubelong	0xf8554346	Untitled Custom Format binary executable
