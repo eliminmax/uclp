@@ -57,29 +57,28 @@ static void add_token(struct token_sequence_builder *builder, Token *token) {
 
 // return a heap-allocated String containing a copy of the current text match
 static String current_lexeme(yyscan_t scanner);
-// parse an integer value from the current lexeme
-static void parse_int(
-    Token *token, const char *start, int base, yyscan_t scanner
-);
 
-// shrink the builder's allocation down, and add the END token
+// shrink the builder's allocation down.
 static void finalize(struct token_sequence_builder *builder) {
-    assert(builder->sequence.len < SIZE_MAX - 1);
-
+    if (builder->sequence.len == 0) {
+        add_token(
+            builder,
+            &(Token){
+                .lexeme = {.text = "", .len = 0},
+                .type = TOKEN_UNPARSEABLE,
+                .line = 0,
+            }
+        );
+    }
     Token *addr = reallocarray(
-        builder->sequence.tokens, builder->sequence.len + 1, sizeof(Token)
+        builder->sequence.tokens, builder->sequence.len, sizeof(Token)
     );
     if (!addr) {
         perror("Failed to shrink allocation of token sequence");
         abort();
     }
-    builder->sequence.tokens = addr;
-    builder->sequence.tokens[builder->sequence.len++] = (Token){
-        .type = SEQ_END,
-    };
     builder->capacity = builder->sequence.len;
 }
-
 #define YY_DECL \
     void yylex(struct token_sequence_builder *builder, yyscan_t yyscanner)
 #define yyterminate() \
@@ -100,173 +99,105 @@ oct_literal 0o[0-7]+{int_size_suffix}
 hex_literal 0x[0-9a-fA-F]+{int_size_suffix}
 ident [_a-zA-Z][_0-9a-zA-Z]*
 
-comment [/]{2}.*
-
 %%
-    Token token;
-    #define BASIC_TOKEN(t, l) \
-        token = (Token){ \
+    #define FIXED_TOKEN(t, l) \
+        add_token(builder, &(Token){ \
             .lexeme = (String){.text = l, .len = sizeof(l) - 1}, \
-            .type = t, \
+            .type = TOKEN_ ## t, \
             .line = yylineno, \
-        }; \
-        add_token(builder, &token);
+        });
+    #define VALUE_TOKEN(t) \
+        add_token(builder, &(Token){ \
+            .lexeme = current_lexeme(yyscanner), \
+            .type = TOKEN_ ## t, \
+            .line = yylineno, \
+            ._should_free = true, \
+        });
 
-{whitespace}
 
-"let" { BASIC_TOKEN(KW_LET, "let"); }
-"static" { BASIC_TOKEN(KW_STATIC, "static"); }
-"func" { BASIC_TOKEN(KW_FUNC, "func"); }
-"if" { BASIC_TOKEN(KW_IF, "if"); }
-"elif" { BASIC_TOKEN(KW_ELIF, "elif"); }
-"else" { BASIC_TOKEN(KW_ELSE, "else"); }
-"while" { BASIC_TOKEN(KW_WHILE, "while"); }
-"dynamic" { BASIC_TOKEN(KW_DYNAMIC, "dynamic"); }
-"opaque" { BASIC_TOKEN(KW_OPAQUE, "opaque"); }
-"i8" { BASIC_TOKEN(KW_I8, "i8"); }
-"i16" { BASIC_TOKEN(KW_I16, "i16"); }
-"i32" { BASIC_TOKEN(KW_I32, "i32"); }
-"i64" { BASIC_TOKEN(KW_I64, "i64"); }
+[ \n\t]+
+"//".*
+"/*"([^/]|[^*][/])*"*/"
 
-{ident} {
-    token = (Token){
-        .type = LITERAL_IDENT,
-        .lexeme = current_lexeme(yyscanner),
-        .line = yylineno,
-        ._should_free = true,
-    };
-    add_token(builder, &token);
-}
+"let" { FIXED_TOKEN(KW_LET, "let"); }
+"static" { FIXED_TOKEN(KW_STATIC, "static"); }
+"func" { FIXED_TOKEN(KW_FUNC, "func"); }
+"if" { FIXED_TOKEN(KW_IF, "if"); }
+"elif" { FIXED_TOKEN(KW_ELIF, "elif"); }
+"else" { FIXED_TOKEN(KW_ELSE, "else"); }
+"while" { FIXED_TOKEN(KW_WHILE, "while"); }
+"dynamic" { FIXED_TOKEN(KW_DYNAMIC, "dynamic"); }
+"opaque" { FIXED_TOKEN(KW_OPAQUE, "opaque"); }
+"i8" { FIXED_TOKEN(KW_I8, "i8"); }
+"i16" { FIXED_TOKEN(KW_I16, "i16"); }
+"i32" { FIXED_TOKEN(KW_I32, "i32"); }
+"i64" { FIXED_TOKEN(KW_I64, "i64"); }
+
+{ident} { VALUE_TOKEN(IDENT); }
 
 {char_literal} {
-    char val;
-    char *s = yytext + 1;
-    if (*s == '\\') {
-        switch(s[1]) {
-            case 'n': val = '\n'; break;
-            case 'r': val = '\r'; break;
-            case 't': val = '\t'; break;
-            case 'x':
-                val = strtoull(&s[2], NULL, 16);
-                break;
-            case '\\':
-            case '\"':
-            case '\'':
-                val = s[1];
-                break;
-            default:
-                assert(isdigit(s[1]));
-                val = strtoull(&s[1], NULL, 8);
-        }
-    } else {
-        val = *s;
-    }
-    token = (Token) {
-        .lexeme = current_lexeme(yyscanner),
-        .type = LITERAL_INT8,
-        .line = yylineno,
-        .literal_i8 = (ucl_i8){.s = val},
-        ._should_free = true,
-    };
-    add_token(builder, &token);
-}
-
+    VALUE_TOKEN(LITERAL_CHAR); }
 {string_literal} {
-    token = (Token){
-        .type = LITERAL_STR,
-        .lexeme = current_lexeme(yyscanner),
-        .line = yylineno,
-        ._should_free = true,
-    };
-    add_token(builder, &token);
-}
+    VALUE_TOKEN(LITERAL_STR); }
 
-{dec_literal} { parse_int(&token, yytext, 10, yyscanner); add_token(builder, &token); }
-{hex_literal} { parse_int(&token, yytext + 2, 16, yyscanner); add_token(builder, &token); }
-{oct_literal} { parse_int(&token, yytext + 2, 8, yyscanner); add_token(builder, &token); }
-{bin_literal} { parse_int(&token, yytext + 2, 2, yyscanner); add_token(builder, &token); }
+{dec_literal} { VALUE_TOKEN(LITERAL_INT_DEC); }
+{hex_literal} { VALUE_TOKEN(LITERAL_INT_HEX); }
+{oct_literal} { VALUE_TOKEN(LITERAL_INT_OCT); }
+{bin_literal} { VALUE_TOKEN(LITERAL_INT_BIN); }
 
-{comment} {
-    token = (Token){
-        .type = COMMENT,
-        .line = yylineno,
-        ._should_free = true,
-        .lexeme = current_lexeme(yyscanner),
-    };
-    add_token(builder, &token);
-}
+"[" { FIXED_TOKEN(L_SQUARE, "["); }
+"]" { FIXED_TOKEN(R_SQUARE, "]"); }
+"{" { FIXED_TOKEN(L_CURLY, "{"); }
+"}" { FIXED_TOKEN(R_CURLY, "}"); }
+"(" { FIXED_TOKEN(L_PAREN, "("); }
+")" { FIXED_TOKEN(R_PAREN, ")"); }
 
-"/*"([^/]|[^*][/])*"*/" {
-    token = (Token){
-        .type = BLOCK_COMMENT,
-        .line = yylineno,
-        ._should_free = true,
-        .lexeme = current_lexeme(yyscanner),
-    };
-    add_token(builder, &token);
-}
+"+" { FIXED_TOKEN(ARITH_PLUS, "+"); }
+"-"  { FIXED_TOKEN(ARITH_MINUS, "-"); }
+"*" { FIXED_TOKEN(ARITH_MUL, "*"); }
+"/" { FIXED_TOKEN(ARITH_DIV, "/"); }
+"%" { FIXED_TOKEN(ARITH_MOD, "%"); }
+"@*" { FIXED_TOKEN(ARITH_SIGNED_MUL, "@*"); }
+"@/" { FIXED_TOKEN(ARITH_SIGNED_DIV, "@/"); }
+"@%" { FIXED_TOKEN(ARITH_SIGNED_MOD, "@%"); }
 
-"[" { BASIC_TOKEN(L_SQUARE, "["); }
-"]" { BASIC_TOKEN(R_SQUARE, "]"); }
-"{" { BASIC_TOKEN(L_CURLY, "{"); }
-"}" { BASIC_TOKEN(R_CURLY, "}"); }
-"(" { BASIC_TOKEN(L_PAREN, "("); }
-")" { BASIC_TOKEN(R_PAREN, ")"); }
+"==" { FIXED_TOKEN(CMP_EQ, "=="); }
+"!=" { FIXED_TOKEN(CMP_NE, "!="); }
+">" { FIXED_TOKEN(CMP_GT, ">"); }
+"<" { FIXED_TOKEN(CMP_LT, "<"); }
+">=" { FIXED_TOKEN(CMP_GE, ">="); }
+"<=" { FIXED_TOKEN(CMP_LE, "<="); }
+"@>" { FIXED_TOKEN(CMP_SIGNED_GT, "@>"); }
+"@<" { FIXED_TOKEN(CMP_SIGNED_LT, "@<"); }
+"@>=" { FIXED_TOKEN(CMP_SIGNED_GE, "@>="); }
+"@<=" { FIXED_TOKEN(CMP_SIGNED_LE, "@<="); }
 
-"+" { BASIC_TOKEN(ARITH_PLUS, "+"); }
-"-"  { BASIC_TOKEN(ARITH_MINUS, "-"); }
-"*" { BASIC_TOKEN(ARITH_MUL, "*"); }
-"/" { BASIC_TOKEN(ARITH_DIV, "/"); }
-"%" { BASIC_TOKEN(ARITH_MOD, "%"); }
-"@*" { BASIC_TOKEN(ARITH_SIGNED_MUL, "@*"); }
-"@/" { BASIC_TOKEN(ARITH_SIGNED_DIV, "@/"); }
-"@%" { BASIC_TOKEN(ARITH_SIGNED_MOD, "@%"); }
+".*" { FIXED_TOKEN(DEREF, ".*"); }
+".&" { FIXED_TOKEN(REF, ".&"); }
 
-"==" { BASIC_TOKEN(CMP_EQ, "=="); }
-"!=" { BASIC_TOKEN(CMP_NE, "!="); }
-">" { BASIC_TOKEN(CMP_GT, ">"); }
-"<" { BASIC_TOKEN(CMP_LT, "<"); }
-">=" { BASIC_TOKEN(CMP_GE, ">="); }
-"<=" { BASIC_TOKEN(CMP_LE, "<="); }
-"@>" { BASIC_TOKEN(CMP_SIGNED_GT, "@>"); }
-"@<" { BASIC_TOKEN(CMP_SIGNED_LT, "@<"); }
-"@>=" { BASIC_TOKEN(CMP_SIGNED_GE, "@>="); }
-"@<=" { BASIC_TOKEN(CMP_SIGNED_LE, "@<="); }
+"&&" { FIXED_TOKEN(LOGICAL_AND, "&&"); }
+"||" { FIXED_TOKEN(LOGICAL_OR, "||"); }
 
-".*" { BASIC_TOKEN(DEREF, ".*"); }
-".&" { BASIC_TOKEN(REF, ".&"); }
+"&" { FIXED_TOKEN(BIT_AND, "&"); }
+"~" { FIXED_TOKEN(BIT_NOT, "~"); }
+"|" { FIXED_TOKEN(BIT_OR, "|"); }
+"^" { FIXED_TOKEN(BIT_XOR, "^"); }
+"," { FIXED_TOKEN(COMMA, ","); }
 
-"&&" { BASIC_TOKEN(LOGICAL_AND, "&&"); }
-"||" { BASIC_TOKEN(LOGICAL_OR, "||"); }
+"#" { FIXED_TOKEN(POUND_SIGN, "#"); }
+"->" { FIXED_TOKEN(ARROW, "->"); }
 
-"&" { BASIC_TOKEN(BIT_AND, "&"); }
-"~" { BASIC_TOKEN(BIT_NOT, "~"); }
-"|" { BASIC_TOKEN(BIT_OR, "|"); }
-"^" { BASIC_TOKEN(BIT_XOR, "^"); }
-"," { BASIC_TOKEN(COMMA, ","); }
+";" { FIXED_TOKEN(SEMICOLON, ";"); }
+":" { FIXED_TOKEN(COLON, ":"); }
+"=" { FIXED_TOKEN(ASSIGN, "="); }
+">>" { FIXED_TOKEN(SHR_LOG, ">>"); }
+"@>>" { FIXED_TOKEN(SHR_ARITH, "@>>"); }
+"<<" { FIXED_TOKEN(SHL, "<<"); }
 
-"#" { BASIC_TOKEN(POUND_SIGN, "#"); }
-"->" { BASIC_TOKEN(ARROW, "->"); }
+":[" { FIXED_TOKEN(UNSIGNED_CAST, ":["); }
+"@:[" { FIXED_TOKEN(SIGNED_CAST, ":["); }
 
-";" { BASIC_TOKEN(SEMICOLON, ";"); }
-":" { BASIC_TOKEN(COLON, ":"); }
-"=" { BASIC_TOKEN(ASSIGN, "="); }
-">>" { BASIC_TOKEN(SHR_LOG, ">>"); }
-"@>>" { BASIC_TOKEN(SHR_ARITH, "@>>"); }
-"<<" { BASIC_TOKEN(SHL, "<<"); }
-
-":[" { BASIC_TOKEN(UNSIGNED_CAST, ":["); }
-"@:[" { BASIC_TOKEN(SIGNED_CAST, ":["); }
-
-[0-9][A-Za-z_][A-Za-z0-9_]*|. {
-    token = (Token){
-        .type = UNPARSEABLE,
-        .line = yylineno,
-        ._should_free = true,
-        .lexeme = current_lexeme(yyscanner),
-    };
-    add_token(builder, &token);
-}
+[0-9][A-Za-z_][A-Za-z0-9_]*|. { VALUE_TOKEN(UNPARSEABLE); }
 %%
 
 #ifdef SCANNER_STANDALONE
@@ -351,46 +282,4 @@ static String current_lexeme(yyscan_t scanner) {
         .text = memcpy(checked_malloc(len), yyget_text(scanner), len),
     };
     return str;
-}
-
-static void parse_int(
-    Token *token, const char *start, int base, yyscan_t scanner
-) {
-    char *end;
-    token->_should_free = true;
-    token->lexeme = current_lexeme(scanner);
-    token->line = yyget_lineno(scanner);
-    unsigned long long val = strtoull(start, &end, base);
-    if (*end == '#') {
-        errno = 0;
-        unsigned long long bit_len = strtoll(&end[1], NULL, 10);
-        if (errno) bit_len = 0;
-        switch (bit_len) {
-            case 8:
-                if (val > UINT8_MAX) goto too_large;
-                token->type = LITERAL_INT8, token->literal_i8.u = val;
-                break;
-            case 16:
-                if (val > UINT16_MAX) goto too_large;
-                token->type = LITERAL_INT16, token->literal_i16.u = val;
-                break;
-            case 32:
-                if (val > UINT32_MAX) goto too_large;
-                token->type = LITERAL_INT32, token->literal_i32.u = val;
-                break;
-            case 64:
-                if (val > UINT64_MAX) goto too_large;
-                token->type = LITERAL_INT64, token->literal_i64.u = val;
-                break;
-                break;
-            default:
-                token->type = BAD_BIT_LEN;
-        }
-    } else {
-        if (val > UINT32_MAX) goto too_large;
-        token->type = RAW_INT, token->literal_i32.u = val;
-    }
-    return;
-too_large:
-    token->type = INT_TOO_LARGE;
 }
