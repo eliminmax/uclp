@@ -70,7 +70,7 @@ SPDX-License-Identifier: 0BSD
         * [Example: `libcpuinfo`](#example-libcpuinfo)
     * [`*dynamic` Pointers](#dynamic-pointers)
         * [Example: `malloc` and `free`](#example-malloc-and-free)
-* [`opaque` types](#opaque-types)
+    * [`opaque` types](#opaque-types)
 
 <!-- vim-markdown-toc -->
 
@@ -431,7 +431,7 @@ let uninit: i8[3];
 
 Chars and strings are not a "proper" type, but instead are syntactic sugar for 8-bit numbers and 8-bit arrays, respectively.
 
-A single ASCII character between 2 quotation marks is read as a numeric value, with the exception of `'` and `\`.
+A single ASCII character other than `'` or `'\`, or a recognized escape sequence, between 2 single quotes, is read as a numeric value.
 
 `\` can be used for escape sequences, with the following supported:
 
@@ -505,6 +505,6 @@ dynamic["libc.so.6"] func malloc(i64 size) -> *dynamic;
 dynamic["libc.so.6"] func free(*dynamic ptr);
 ```
 
-## `opaque` types
+### `opaque` types
 
-For the purposes of C interop, the syntax `opaque.SIZE.ALIGNMENT` can be used as a type, where `ALIGNMENT` is a number with a value that's one of `8`, `16`, `32`, or `64`, and `SIZE` is a multiple of the number used for `ALIGNMENT`
+For the purposes of C interop, the syntax `opaque.SIZE.ALIGNMENT` can be used as a type, where `ALIGNMENT` is a number with a value that's one of `8`, `16`, `32`, or `64`, and `SIZE` is a multiple of the number used for `ALIGNMENT`.
