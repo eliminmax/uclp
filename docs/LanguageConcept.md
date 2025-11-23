@@ -265,8 +265,8 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 
 ##### Examples
 
-* `~0#8` evaluates to `0b1111_1111#8`
-* `~0b1010_1010` evaluates to `0b1111_1111_1111_1111_1111_1111_0101_0101` (due to the implicit 32-bit integer width default)
+* `~0#8` evaluates to `0b11111111#8`
+* `~0b10101010` evaluates to `0b11111111111111111111111101010101` (due to the implicit 32-bit integer width default)
 
 #### Negation
 
@@ -290,7 +290,7 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 
 * `:[8]0x1234#16` evaluates to `0x34#8`
 * `:[16]0xdeadbeef` evaluates to `0xbeef#16`
-* `:[32]0xff#8` evaluates to `0xffff_ffff#32`
+* `:[32]0xff#8` evaluates to `0xffffffff#32`
 
 #### Unsigned Multiplication
 
