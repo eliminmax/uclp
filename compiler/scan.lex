@@ -89,7 +89,7 @@ static void finalize(struct token_sequence_builder *builder) {
 
 whitespace [ \n\t]+
 
-escaped_char \\[ntr'\"\\]|\\x[0-8a-f]{2}|\\[0-3]?([0-7]{1,2})
+escaped_char \\[ntr'\"\\]|\\x[0-9a-f]{2}|\\[0-3]?([0-7]{1,2})
 char_literal '([^'\\\n\r]|{escaped_char})'
 string_literal \"([^"\\\n\r]|{escaped_char})*\"
 
