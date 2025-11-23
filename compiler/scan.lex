@@ -236,8 +236,8 @@ comment [/]{2}.*
 ".*" { BASIC_TOKEN(DEREF, ".*"); }
 ".&" { BASIC_TOKEN(REF, ".&"); }
 
-"&&" { BASIC_TOKEN(LOG_AND, "&&"); }
-"||" { BASIC_TOKEN(LOG_OR, "||"); }
+"&&" { BASIC_TOKEN(LOGICAL_AND, "&&"); }
+"||" { BASIC_TOKEN(LOGICAL_OR, "||"); }
 
 "&" { BASIC_TOKEN(BIT_AND, "&"); }
 "~" { BASIC_TOKEN(BIT_NOT, "~"); }
