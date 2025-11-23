@@ -127,8 +127,6 @@ Integer literals have up to 3 components - the (optional) base modifier prefix, 
 
 If no base modifier prefix is present, then the integer value is written in decimal. The base modifiers supported are `0x` for hexadecimal, `0b` for binary, or `0o` for octal.
 
-If a single underscore (`_`) appears between digits, it's ignored, as a digit separator.
-
 The type suffix is one of `#8`, `#16`, `#32`, or `#64`, for 8-bit, 16-bit, 32-bit, or 64-bit integers. If not specified, 32-bit is assumed.
 
 ### Variable Declarations
