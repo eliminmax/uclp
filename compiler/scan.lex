@@ -195,7 +195,7 @@ ident [_a-zA-Z][_0-9a-zA-Z]*
 "<<" { FIXED_TOKEN(SHL, "<<"); }
 
 ":[" { FIXED_TOKEN(UNSIGNED_CAST, ":["); }
-"@:[" { FIXED_TOKEN(SIGNED_CAST, ":["); }
+"@:[" { FIXED_TOKEN(SIGNED_CAST, "@:["); }
 
 [0-9][A-Za-z_][A-Za-z0-9_]*|. { VALUE_TOKEN(UNPARSEABLE); }
 %%
