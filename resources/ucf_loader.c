@@ -200,24 +200,19 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    union {
-        char bytes[sizeof(Header)];
-        Header header;
-    } header_reader;
+    Header header;
 
-    Header *header = &header_reader.header;
-
-    ssize_t read_count = read(fd, header_reader.bytes, sizeof(Header));
+    ssize_t read_count = read(fd, &header, sizeof(Header));
 
     if (read_count != sizeof(Header)) {
         fputs("Failed to read header from file.\n", stderr);
         goto err_after_opening;
     }
-    if (!validate_header(header)) goto err_after_opening;
+    if (!validate_header(&header)) goto err_after_opening;
 
-    if (header->num_ffi_handles || header->num_ffi_handles) {
+    if (header.num_ffi_handles || header.num_ffi_handles) {
         // starting page also has header, so make sure to leave room
-        size_t map_size = header->ffi_size + sizeof(Header);
+        size_t map_size = header.ffi_size + sizeof(Header);
         char *ffi_page = mmap(NULL, map_size, PROT_READ, MAP_PRIVATE, fd, 0);
         if (ffi_page == MAP_FAILED) {
             perror("Failed to mmap ffi segment");
@@ -225,8 +220,8 @@ int main(int argc, char *argv[]) {
         }
 
         bool loaded_foreign_funcs = load_foreign_funcs(
-            header->num_ffi_handles,
-            header->num_ffi_funcs,
+            header.num_ffi_handles,
+            header.num_ffi_funcs,
             // skip past the header to the start of the ffi segment
             &ffi_page[sizeof(Header)]
         );
@@ -234,14 +229,14 @@ int main(int argc, char *argv[]) {
         if (!loaded_foreign_funcs) goto err_after_opening;
     }
 
-    off_t var_page_start = (sizeof(Header) + header->ffi_size) & ~0xfff;
-    off_t var_offset = (sizeof(Header) + header->ffi_size) & 0xfff;
+    off_t var_page_start = (sizeof(Header) + header.ffi_size) & ~0xfff;
+    off_t var_offset = (sizeof(Header) + header.ffi_size) & 0xfff;
 
     void *variables = NULL;
-    if (header->var_size) {
+    if (header.var_size) {
         variables = mmap(
             NULL,
-            header->var_size,
+            header.var_size,
             PROT_READ | PROT_WRITE,
             MAP_PRIVATE,
             fd,
@@ -254,7 +249,7 @@ int main(int argc, char *argv[]) {
         variables = ((char *)variables) + var_offset;
     }
 
-    size_t code_page_start = var_page_start + var_offset + header->var_size;
+    size_t code_page_start = var_page_start + var_offset + header.var_size;
     if (code_page_start & 0xfff) {
         if (code_page_start > (SSIZE_MAX - 0x1000)) {
             fprintf(stderr, "Code offset %zu too large\n", code_page_start);
@@ -266,7 +261,7 @@ int main(int argc, char *argv[]) {
 
     void *code = mmap(
         NULL,
-        header->code_size,
+        header.code_size,
         PROT_READ | PROT_EXEC,
         MAP_PRIVATE,
         fd,
