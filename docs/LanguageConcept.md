@@ -127,6 +127,8 @@ Integer literals have up to 3 components - the (optional) base modifier prefix, 
 
 If no base modifier prefix is present, then the integer value is written in decimal. The base modifiers supported are `0x` for hexadecimal, `0b` for binary, or `0o` for octal.
 
+If a single underscore (`_`) appears between digits, it's ignored, as a digit separator.
+
 The type suffix is one of `#8`, `#16`, `#32`, or `#64`, for 8-bit, 16-bit, 32-bit, or 64-bit integers. If not specified, 32-bit is assumed.
 
 ### Variable Declarations
@@ -265,8 +267,8 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 
 ##### Examples
 
-* `~0#8` evaluates to `0b11111111#8`
-* `~0b10101010` evaluates to `0b11111111111111111111111101010101` (due to the implicit 32-bit integer width default)
+* `~0#8` evaluates to `0b1111_1111#8`
+* `~0b1010_1010` evaluates to `0b1111_1111_1111_1111_1111_1111_0101_0101` (due to the implicit 32-bit integer width default)
 
 #### Negation
 
@@ -290,7 +292,7 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 
 * `:[8]0x1234#16` evaluates to `0x34#8`
 * `:[16]0xdeadbeef` evaluates to `0xbeef#16`
-* `:[32]0xff#8` evaluates to `0xffffffff#32`
+* `:[32]0xff#8` evaluates to `0xffff_ffff#32`
 
 #### Unsigned Multiplication
 
