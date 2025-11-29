@@ -19,6 +19,9 @@ typedef void (*_Nullable HTEntryCleanupFn)(void *_Nonnull);
 // create a new HashTable
 HashTable ht_create();
 
+// compute the hash value of the string
+uint64_t hash_string(const String s);
+
 // clean up a HashTable, freeing its internal allocations then freeing it
 // itself. Second argument is a callback function to clean up the entries - e.g.
 // if they need to be `free`d, `free` would be an appropriate choice.
