@@ -10,7 +10,7 @@
 #error "Only works on x86_64"
 #endif
 #if __STDC_VERSION__ < 202311L
-#error "C23 additions required"
+#error Minimum supported C version: is C23
 #endif
 
 #include <assert.h>
