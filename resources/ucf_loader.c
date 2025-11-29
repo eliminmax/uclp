@@ -56,18 +56,6 @@ static void run(void *vars, const void *foreign_funcs, const void *start) {
 
 // validate that the environment
 static bool validate_environment(int argc, char *argv[]) {
-    // POSIX requires this, but ISO C doesn't, so double-check
-    static_assert(CHAR_BIT == 8, "8-bit char support required");
-
-    // SSIZE_MAX is defined, but OFF_MAX isn't, so make sure they're the same
-    // size types so that SSIZE_MAX can be used for off_t overflow checks
-    static_assert(
-        sizeof(off_t) == sizeof(ssize_t),
-        "off_t must be the same size as ssize_t"
-    );
-
-    static_assert(sizeof(Header) == 32, "Header struct is the wrong size");
-
     if (argc <= 1) {
         fputs("Error: No file provided\n", stderr);
         return false;
@@ -281,3 +269,14 @@ err_after_opening:
     close(fd);
     return EXIT_FAILURE;
 }
+
+// POSIX requires this, but ISO C doesn't, so double-check
+static_assert(CHAR_BIT == 8, "8-bit char support required");
+
+// SSIZE_MAX is defined, but OFF_MAX isn't, so make sure they're the same
+// size types so that SSIZE_MAX can be used for off_t overflow checks
+static_assert(
+    sizeof(off_t) == sizeof(ssize_t), "off_t must be the same size as ssize_t"
+);
+
+static_assert(sizeof(Header) == 32, "Header struct is the wrong size");
