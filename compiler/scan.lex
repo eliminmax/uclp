@@ -28,9 +28,6 @@ struct token_sequence_builder {
 
 #define YY_NO_INPUT
 #define YY_NO_UNPUT
-extern inline void destroy_token(Token);
-extern inline void destroy_token_sequence(struct token_sequence);
-
 static void add_token(struct token_sequence_builder *builder, Token *token) {
     assert(builder->sequence.len <= builder->capacity);
     if (builder->sequence.len == builder->capacity) {
@@ -102,7 +99,7 @@ ident [_a-zA-Z][_0-9a-zA-Z]*
 %%
     #define FIXED_TOKEN(t, l) \
         add_token(builder, &(Token){ \
-            .lexeme = (String){.text = l, .len = sizeof(l) - 1}, \
+            .lexeme = (String){.len = sizeof(l) - 1, .text = l}, \
             .type = TOKEN_ ## t, \
             .line = yylineno, \
         });
@@ -111,7 +108,6 @@ ident [_a-zA-Z][_0-9a-zA-Z]*
             .lexeme = current_lexeme(yyscanner), \
             .type = TOKEN_ ## t, \
             .line = yylineno, \
-            ._should_free = true, \
         });
 
 
@@ -248,6 +244,14 @@ int main(int argc, char **argv) {
     destroy_token_sequence(builder.sequence);
 }
 
+extern inline void destroy_token(Token);
+extern inline void destroy_token_sequence(struct token_sequence);
+
+[[gnu::returns_nonnull]]
+extern inline void *checked_calloc(size_t, size_t);
+[[gnu::returns_nonnull]]
+extern inline void *checked_malloc(size_t);
+
 #else
 
 struct token_sequence tokenize(size_t len, const char source[_Nonnull len]) {
@@ -279,7 +283,8 @@ static String current_lexeme(yyscan_t scanner) {
 
     String str = (String){
         .len = len,
-        .text = memcpy(checked_malloc(len), yyget_text(scanner), len),
+        .text =
+            len ? memcpy(checked_malloc(len), yyget_text(scanner), len) : NULL,
     };
     return str;
 }

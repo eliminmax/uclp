@@ -23,12 +23,11 @@ typedef struct token {
     size_t line;
 
     enum token_type type;
-    // use would-be padding to track responsibility for freeing the lexeme
-    bool _should_free;
+    bool should_free_text;
 } Token;
 
 inline void destroy_token(Token t) {
-    if (t._should_free) free(t.lexeme.text);
+    if (t.should_free_text) free(t.lexeme.text);
 }
 
 struct token_sequence {
