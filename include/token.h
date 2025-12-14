@@ -12,11 +12,12 @@
 #include "alloc.h"
 #include "sized_string.h"
 
+#define DEFINE_TOKENS
+
 enum token_type : uint8_t {
 
-#define DEFINE_TOKENS
 #include "lang/tokens.h"
-#undef DEFINE_TOKENS
+
 };
 
 typedef struct token {

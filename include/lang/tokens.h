@@ -4,12 +4,11 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-#include <stdint.h>
 #ifdef DEFINE_TOKENS
-#define TOKEN(T) TOKEN_ ## T,
+#define TOKEN(T) TOKEN_##T,
 #elifdef DEBUG_TOKENS
 #define TOKEN(T) \
-    case TOKEN_ ## T: \
+    case TOKEN_##T: \
         printf("<" #T ", line %zu, lexeme `%s`>\n", TOK.line, lexeme); \
         break;
 
@@ -159,6 +158,7 @@ TOKEN(KW_I32)
 // "i64"
 TOKEN(KW_I64)
 
+// literal tokens
 TOKEN(LITERAL_STR)
 TOKEN(LITERAL_CHAR)
 TOKEN(LITERAL_INT_DEC)
