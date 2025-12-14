@@ -128,6 +128,8 @@ ident [_a-zA-Z][_0-9a-zA-Z]*
 "elif" { FIXED_TOKEN(KW_ELIF, "elif"); }
 "else" { FIXED_TOKEN(KW_ELSE, "else"); }
 "while" { FIXED_TOKEN(KW_WHILE, "while"); }
+"foreach" { FIXED_TOKEN(KW_FOREACH, "foreach"); }
+"in" { FIXED_TOKEN(KW_IN, "in"); }
 "dynamic" { FIXED_TOKEN(KW_DYNAMIC, "dynamic"); }
 "opaque" { FIXED_TOKEN(KW_OPAQUE, "opaque"); }
 "i8" { FIXED_TOKEN(KW_I8, "i8"); }

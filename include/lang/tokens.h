@@ -145,6 +145,10 @@ TOKEN(KW_ELIF)
 TOKEN(KW_ELSE)
 // "while"
 TOKEN(KW_WHILE)
+// "foreach"
+TOKEN(KW_FOREACH)
+// "in"
+TOKEN(KW_IN)
 // "dynamic"
 TOKEN(KW_DYNAMIC)
 // "opaque"
