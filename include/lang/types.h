@@ -75,7 +75,7 @@ struct ucl_array {
     size_t len;
 };
 
-// A tagged union representing a type and its metadata
+// A tagged union representing a type
 typedef struct ucl_type {
     enum ucl_type_tag: uint8_t {
         TYPE_POINTER,
@@ -86,8 +86,6 @@ typedef struct ucl_type {
         TYPE_I64,
         TYPE_ARRAY
     } tag;
-
-    enum : uint8_t { STORAGE_STACK, STORAGE_STATIC } storage;
 
     union {
         struct ucl_pointer ptr;
