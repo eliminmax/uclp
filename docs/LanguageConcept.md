@@ -71,6 +71,7 @@ SPDX-License-Identifier: 0BSD
     * [`*dynamic` Pointers](#dynamic-pointers)
         * [Example: `malloc` and `free`](#example-malloc-and-free)
     * [`opaque` types](#opaque-types)
+        * [`opaque` type example](#opaque-type-example)
 
 <!-- vim-markdown-toc -->
 
@@ -510,3 +511,40 @@ dynamic["libc.so.6"] func free(*dynamic ptr);
 ### `opaque` types
 
 For the purposes of C interop, the syntax `opaque.SIZE.ALIGNMENT` can be used as a type, where `ALIGNMENT` is a number with a value that's one of `8`, `16`, `32`, or `64`, and `SIZE` is a multiple of the number used for `ALIGNMENT`.
+
+#### `opaque` type example
+
+Suppose that there's a library that works with a fat pointer for strings, with the SONAME "`libfatstring.so.0`", with an API that uses the following typedef and functions:
+
+```c
+typedef struct sized_string {
+    size_t len;
+    char *text
+} String;
+
+String cstring_to_string(char *s);
+String join_strings(String a, String b);
+void print_string(String s);
+```
+
+While UCLP's lack of struct types makes actually editing the `String` more restricted, `dynamic` function declarations with `opaque` types could make it somewhat usable.
+
+With 64-bit pointers and `size_t`s:
+
+```uclp
+dynamic["libfatstring.so.0"]
+    func new_string # "cstring_to_string" (i8 *s) -> opaque.16.8;
+
+dynamic["libfatstring.so.0"]
+    func join_strings(opaque.16.8 a, opaque.16.8 b) -> opaque.16.8;
+
+dynamic["libfatstring.so.0"]
+    func print # "print_string" (opaque.16.8 s);
+
+let print_size = print(
+    join_strings(
+        new_string(&"Hello, "),
+        new_string(&"world!\n")
+    )
+);
+```
