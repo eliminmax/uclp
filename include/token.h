@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "alloc.h"
 #include "sized_string.h"
 
 enum token_type : uint8_t {
@@ -40,6 +41,8 @@ inline void destroy_token_sequence(struct token_sequence seq) {
     free(seq.tokens);
 }
 
-struct token_sequence tokenize(size_t len, const char source[_Nonnull len]);
+struct token_sequence tokenize(
+    size_t len, AllocGroup ag, const char source[_Nonnull len]
+);
 
 #endif /* TOKEN_H */

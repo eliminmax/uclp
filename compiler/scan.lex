@@ -49,14 +49,16 @@ static void add_token(struct token_sequence_builder *builder, Token *token) {
     memcpy(
         &builder->sequence.tokens[builder->sequence.len], token, sizeof(Token)
     );
+
     builder->sequence.len++;
 }
 
 // return a heap-allocated String containing a copy of the current text match
-static String current_lexeme(yyscan_t scanner);
+static String current_lexeme(yyscan_t scanner, AllocGroup ag);
 
 // shrink the builder's allocation down.
 static void finalize(struct token_sequence_builder *builder) {
+    // make sure that the sequence is non-empty
     if (builder->sequence.len == 0) {
         add_token(
             builder,
@@ -77,7 +79,11 @@ static void finalize(struct token_sequence_builder *builder) {
     builder->capacity = builder->sequence.len;
 }
 #define YY_DECL \
-    void yylex(struct token_sequence_builder *builder, yyscan_t yyscanner)
+    void yylex( \
+        struct token_sequence_builder *builder, \
+        AllocGroup allocator, \
+        yyscan_t yyscanner \
+    )
 #define yyterminate() \
     finalize(builder); \
     return
@@ -105,7 +111,7 @@ ident [_a-zA-Z][_0-9a-zA-Z]*
         });
     #define VALUE_TOKEN(t) \
         add_token(builder, &(Token){ \
-            .lexeme = current_lexeme(yyscanner), \
+            .lexeme = current_lexeme(yyscanner, ag), \
             .type = TOKEN_ ## t, \
             .line = yylineno, \
         });
@@ -202,6 +208,7 @@ int main(int argc, char **argv) {
     ++argv, --argc;
     yyscan_t scanner;
     yylex_init(&scanner);
+    AllocGroup ag = group_create();
 
     FILE *in;
     if (argc) {
@@ -220,7 +227,7 @@ int main(int argc, char **argv) {
             },
         .capacity = 1
     };
-    yylex(&builder, scanner);
+    yylex(&builder, ag, scanner);
     if (argc) fclose(in);
     yylex_destroy(scanner);
 
@@ -241,6 +248,7 @@ int main(int argc, char **argv) {
 #undef TOK
         free(lexeme);
     }
+    group_free(ag);
     destroy_token_sequence(builder.sequence);
 }
 
@@ -251,10 +259,18 @@ extern inline void destroy_token_sequence(struct token_sequence);
 extern inline void *checked_calloc(size_t, size_t);
 [[gnu::returns_nonnull]]
 extern inline void *checked_malloc(size_t);
+[[gnu::returns_nonnull]]
+extern inline void *checked_realloc(void *_Nullable, size_t);
+[[gnu::returns_nonnull]]
+extern inline void *checked_reallocarray(void *_Nullable, size_t, size_t);
+[[gnu::returns_nonnull]]
+extern inline void *checked_aligned_alloc(size_t, size_t);
 
 #else
 
-struct token_sequence tokenize(size_t len, const char source[_Nonnull len]) {
+struct token_sequence tokenize(
+    size_t len, AllocGroup ag, const char source[_Nonnull len]
+) {
     yyscan_t scanner;
     yylex_init(&scanner);
     if (len > INT_MAX - 2) {
@@ -271,20 +287,20 @@ struct token_sequence tokenize(size_t len, const char source[_Nonnull len]) {
             },
         .capacity = 1
     };
+    yylex(&builder, ag, scanner);
 
     yylex_destroy(scanner);
     return builder.sequence;
 }
 #endif
 
-static String current_lexeme(yyscan_t scanner) {
-    int len = yyget_leng(scanner);
+static String current_lexeme(yyscan_t scn, AllocrGroup ag) {
+    int len = yyget_leng(scn);
     assert(len >= 0);
 
-    String str = (String){
-        .len = len,
-        .text =
-            len ? memcpy(checked_malloc(len), yyget_text(scanner), len) : NULL,
-    };
+    char *ptr =
+        len ? memcpy(group_alloc(ag, len, 1), yyget_text(scn), len) : NULL;
+
+    String str = {len, ptr};
     return str;
 }
