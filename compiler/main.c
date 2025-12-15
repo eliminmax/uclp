@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+ *
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
 #include <stddef.h>
 
 #include "alloc.h" // IWYU pragma: keep
