@@ -301,7 +301,7 @@ static String current_lexeme(yyscan_t scn, AllocrGroup ag) {
     assert(len >= 0);
 
     char *ptr =
-        len ? memcpy(group_alloc(ag, len, 1), yyget_text(scn), len) : NULL;
+        len ? memcpy(group_alloc(ag, len + 1, 1), yyget_text(scn), len + 1) : NULL;
 
     String str = {len, ptr};
     return str;
