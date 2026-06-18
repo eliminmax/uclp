@@ -1,0 +1,120 @@
+(*
+SPDX-FileCopyrightText: 2026 Eli Array Minkoff
+
+SPDX-License-Identifier: 0BSD
+
+This file contains a hand-written, unverified EBNF definition for UCLP, which
+uses some simple regexes in special sequences for the sake of brevity.
+
+*)
+
+PROGRAM = sp, {STMT, sp};
+
+(* common "building blocks" for use in other definitions *)
+
+binary digit = ?/[01]/? ;
+octal digit = ?/[0-7]/? ;
+decimal digit = ?/[0-9]/? ;
+letter = ?/[A-Za-z]/? ;
+hex digit = ?/[0-9a-fA-F]/? ;
+
+escaped char = "\", (
+               "n" | "t" | "r" | "'" | '"' | "\"
+               | ("x", hex digit, hex digit)
+               | [?/[0-3]/?], [octal digit], octal digit) ;
+
+unit size = "8" | "16" | "32" | "64" ;
+whitespace = ?/[ \t\n]+/? | ( inline comment, { inline comment } ) ;
+
+sp = { whitespace } ;
+
+binary literal = "0b", binary digit, {{"_"}, binary digit } ;
+octal literal = "0o", octal digit, {{"_"}, octal digit } ;
+decimal literal = decimal digit, {{"_"}, decimal digit} ;
+hex literal = "0x", hex digit, {{"_"}, hex digit } ;
+number literal = binary literal |
+                  octal literal |
+                decimal literal |
+                    hex literal ;
+
+char literal = "'", ( ?/[^\\'\n]/?  | escaped char), "'";
+
+(* TO CONSIDER: C-style implicit string literal concatenation? *)
+string literal = '"', { ?/[^\\\"\n]*/? }, '"';
+literal = (number literal, ["#", unit size]) | char literal | string literal ;
+
+(* miscellaneous *)
+
+inline comment = "//", { ?/./? } ;
+block comment = "/*", { ?/[^*]|\*[^/]/? }, "*/" ;
+identifier = ( letter | "_" ), { letter | "_" | decimal digit } ;
+
+(*********)
+(* TYPES *)
+(*********)
+
+integral type = "i", unit size ;
+pointer type = "*", sp, (TYPE | "dynamic") ;
+array type = TYPE, "[", sp, number literal, sp, "]" ;
+opaque type = "opaque.", number literal, ".", number literal ;
+TYPE = (integral type | pointer type | array type | opaque type), sp ;
+
+(***************)
+(* EXPRESSIONS *)
+(***************)
+
+EXPR = assignment, sp ;
+assignment = { "=", sp }, logical and or ;
+assignable = (identifier | deref | index), sp ;
+
+logical and or = arith cmp, { ("||" | "&&"), sp, arith cmp } ;
+arith cmp = bit shift, { 
+                (( "!=" | "==") | ( ["$"], (">" | "<"), ["="] ) ), sp,
+        bit shift } ;
+bit shift = bitwise, { sp, (">>" | "<<" | "$>>"), sp, bitwise } ;
+bitwise = sum, { sp, ("|" | "&" | "^"), sp, sum } ;
+sum = product, { sp, ("+" | "-"), sp, product } ;
+product = unary, { sp, ["$"], ("*" | "/" | "%"), sp, unary } ;
+unary = { "!" | "~" | "-" | "&" | "*" | (["$"], ":[", unit size, "]") },
+        sp, index ;
+index = atom, { "[", sp, EXPR, "]" } ;
+
+atom = (literal
+       | (identifier, [sp, "()"])
+       | ("(", sp, EXPR, ")")
+       | array definition), sp ;
+deref = "*", sp, EXPR ;
+
+(**************)
+(* STATEMENTS *)
+(**************)
+
+let ident = "let", whitespace, identifier, sp ;
+func ident = "func", whitespace, identifier, sp ;
+variable declaration = ( (let ident, ":", sp, TYPE, [ "=", sp, EXPR ]) 
+                       | (let ident, "=", sp, EXPR), ";" ;
+function declaration = func ident, sp, params, return type, block ;
+
+return type = [ "->", sp, TYPE ] ;
+
+dynamic prefix = "dynamic", sp, "[", sp, string literal, sp, "]", sp ;
+extern name = [ "#", sp, string literal, sp ];
+
+extern variable = dynamic prefix, let ident, extern name, ":", sp, TYPE ;
+extern function = dynamic prefix, func ident, extern name, params, ";" ;
+param = TYPE, whitespace, identifier, sp ;
+params = "(", { param, "," }, [ param ], ")", sp ;
+
+while = "while", sp, "(", sp, EXPR, ")", sp, STMT ;
+if = "if", sp, "(", sp, EXPR, ")", sp, STMT, { "else", sp, STMT } ;
+foreach = "foreach", sp, "(", identifier, sp, "in", sp, ;
+
+expr stmt = expr, ";" ;
+
+STMT = (block
+         | if | while | foreach
+         | expr stmt
+         | variable declaration | function declaration
+         | extern variable | extern function), sp;
+
+(* vi: set ft=ebnf: *)
