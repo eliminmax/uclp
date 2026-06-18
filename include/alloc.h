@@ -85,7 +85,7 @@ AllocGroup group_create();
 void group_free(AllocGroup ag [[clang::release_handle("alloc_group")]]);
 
 // claim the first region within the group of at least `size` that is aligned to
-// `1 << align_by` bytes. (`(1 << align_by) <=
+// `1 << align_by` bytes.
 void *_Nonnull group_alloc(
     AllocGroup ag [[clang::use_handle("alloc_group")]],
     size_t size,
