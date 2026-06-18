@@ -105,14 +105,19 @@ extern function = dynamic prefix, func ident, extern name, params, ";" ;
 param = TYPE, whitespace, identifier, sp ;
 params = "(", { param, "," }, [ param ], ")", sp ;
 
-while = "while", sp, "(", sp, EXPR, ")", sp, STMT ;
 if = "if", sp, "(", sp, EXPR, ")", sp, STMT, { "else", sp, STMT } ;
-foreach = "foreach", sp, "(", identifier, sp, "in", sp, ;
+
+loop name = [identifier, sp, ":", sp, ];
+while = loop name, "while", sp, "(", sp, EXPR, ")", sp, STMT ;
+foreach = loop name, "foreach", sp, "(", identifier, sp, "in", sp, ;
+
+return = "return", sp, [ EXPR ], ";" ;
+break = "break", sp, [ identifier, sp ], ";"
 
 expr stmt = expr, ";" ;
 
 STMT = (block
-         | if | while | foreach
+         | if | while | foreach | return
          | expr stmt
          | variable declaration | function declaration
          | extern variable | extern function), sp;
