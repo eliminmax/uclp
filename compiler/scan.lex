@@ -161,9 +161,9 @@ ident [_a-zA-Z][_0-9a-zA-Z]*
 "*" { FIXED_TOKEN(ARITH_MUL, "*"); }
 "/" { FIXED_TOKEN(ARITH_DIV, "/"); }
 "%" { FIXED_TOKEN(ARITH_MOD, "%"); }
-"@*" { FIXED_TOKEN(ARITH_SIGNED_MUL, "@*"); }
-"@/" { FIXED_TOKEN(ARITH_SIGNED_DIV, "@/"); }
-"@%" { FIXED_TOKEN(ARITH_SIGNED_MOD, "@%"); }
+"$*" { FIXED_TOKEN(ARITH_SIGNED_MUL, "$*"); }
+"$/" { FIXED_TOKEN(ARITH_SIGNED_DIV, "$/"); }
+"$%" { FIXED_TOKEN(ARITH_SIGNED_MOD, "$%"); }
 
 "==" { FIXED_TOKEN(CMP_EQ, "=="); }
 "!=" { FIXED_TOKEN(CMP_NE, "!="); }
@@ -171,10 +171,10 @@ ident [_a-zA-Z][_0-9a-zA-Z]*
 "<" { FIXED_TOKEN(CMP_LT, "<"); }
 ">=" { FIXED_TOKEN(CMP_GE, ">="); }
 "<=" { FIXED_TOKEN(CMP_LE, "<="); }
-"@>" { FIXED_TOKEN(CMP_SIGNED_GT, "@>"); }
-"@<" { FIXED_TOKEN(CMP_SIGNED_LT, "@<"); }
-"@>=" { FIXED_TOKEN(CMP_SIGNED_GE, "@>="); }
-"@<=" { FIXED_TOKEN(CMP_SIGNED_LE, "@<="); }
+"$>" { FIXED_TOKEN(CMP_SIGNED_GT, "$>"); }
+"$<" { FIXED_TOKEN(CMP_SIGNED_LT, "$<"); }
+"$>=" { FIXED_TOKEN(CMP_SIGNED_GE, "$>="); }
+"$<=" { FIXED_TOKEN(CMP_SIGNED_LE, "$<="); }
 
 ".*" { FIXED_TOKEN(DEREF, ".*"); }
 ".&" { FIXED_TOKEN(REF, ".&"); }
@@ -195,11 +195,11 @@ ident [_a-zA-Z][_0-9a-zA-Z]*
 ":" { FIXED_TOKEN(COLON, ":"); }
 "=" { FIXED_TOKEN(ASSIGN, "="); }
 ">>" { FIXED_TOKEN(SHR_LOG, ">>"); }
-"@>>" { FIXED_TOKEN(SHR_ARITH, "@>>"); }
+"$>>" { FIXED_TOKEN(SHR_ARITH, "$>>"); }
 "<<" { FIXED_TOKEN(SHL, "<<"); }
 
 ":[" { FIXED_TOKEN(UNSIGNED_CAST, ":["); }
-"@:[" { FIXED_TOKEN(SIGNED_CAST, "@:["); }
+"$:[" { FIXED_TOKEN(SIGNED_CAST, "$:["); }
 
 [0-9][A-Za-z_][A-Za-z0-9_]*|. { VALUE_TOKEN(UNPARSEABLE); }
 %%

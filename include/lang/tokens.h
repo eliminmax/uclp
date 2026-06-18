@@ -45,11 +45,11 @@ TOKEN(ARITH_MUL)
 TOKEN(ARITH_DIV)
 // standalone "%"
 TOKEN(ARITH_MOD)
-// "@*"
+// "$*"
 TOKEN(ARITH_SIGNED_MUL)
-// "@/"
+// "$/"
 TOKEN(ARITH_SIGNED_DIV)
-// "@%"
+// "$%"
 TOKEN(ARITH_SIGNED_MOD)
 
 // comparison tokens
@@ -66,13 +66,13 @@ TOKEN(CMP_GT)
 TOKEN(CMP_LE)
 // ">="
 TOKEN(CMP_GE)
-// "@<"
+// "$<"
 TOKEN(CMP_SIGNED_LT)
-// "@>"
+// "$>"
 TOKEN(CMP_SIGNED_GT)
-// "@<="
+// "$<="
 TOKEN(CMP_SIGNED_LE)
-// "@>="
+// "$>="
 TOKEN(CMP_SIGNED_GE)
 
 // pointer operations
@@ -102,7 +102,7 @@ TOKEN(BIT_XOR)
 
 // ">>"
 TOKEN(SHR_LOG)
-// "@>>"
+// "$>>"
 TOKEN(SHR_ARITH)
 // "<<"
 TOKEN(SHL)
@@ -126,7 +126,7 @@ TOKEN(COMMA)
 
 // ":["
 TOKEN(UNSIGNED_CAST)
-// "@:["
+// "$:["
 TOKEN(SIGNED_CAST)
 
 // keyword tokens

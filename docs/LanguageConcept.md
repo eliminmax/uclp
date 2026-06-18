@@ -218,7 +218,7 @@ while CONDITION {
 
 There are the normal unary and binary operations that most languages have, as well as downcasts to shrink integers to a smaller size, as well as sign extensions and zero extensions to grow them.
 
-By default, operations are assumed to follow unsigned semantics. For operations where unsigned and signed semantics differ, a signed variant exists, using the `@` sign at the start of the operator.
+By default, operations are assumed to follow unsigned semantics. For operations where unsigned and signed semantics differ, a signed variant exists, using the `$` sign at the start of the operator.
 
 ### Overview and Syntax
 
@@ -228,20 +228,20 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 | Bitwise Not               | `~a`       | 1        |
 | Negation                  | `-a`       | 1        |
 | Unsigned Cast to N Bits   | `:[N]a`    | 1        |
-| Signed Cast to N Bits     | `@:[N]a`   | 1        |
+| Signed Cast to N Bits     | `$:[N]a`   | 1        |
 | Unsigned Multiplication   | `a * b`    | 2        |
 | Unsigned Division         | `a / b`    | 2        |
 | Unsigned Modulo           | `a % b`    | 2        |
-| Signed Multiplication     | `a @* b`   | 2        |
-| Signed Division           | `a @/ b`   | 2        |
-| Signed Modulo             | `a @% b`   | 2        |
+| Signed Multiplication     | `a $* b`   | 2        |
+| Signed Division           | `a $/ b`   | 2        |
+| Signed Modulo             | `a $% b`   | 2        |
 | Addition                  | `a + b`    | 3        |
 | Subtraction               | `a - b`    | 3        |
 | Bitwise And               | `a & b`    | 4        |
 | Bitwise Or                | `a \| b`   | 4        |
 | Bitwise Xor               | `a ^ b`    | 4        |
 | Logical Shift Right       | `a >> b`   | 5        |
-| Arithmetic Shift Right    | `a @>> b`  | 5        |
+| Arithmetic Shift Right    | `a $>> b`  | 5        |
 | Shift Left                | `a << b`   | 5        |
 | Equal                     | `a == b`   | 6        |
 | Not Equal                 | `a != b`   | 6        |
@@ -249,10 +249,10 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 | Unsigned Greater Than     | `a > b`    | 6        |
 | Unsigned Less or Equal    | `a <= b`   | 6        |
 | Unsigned Greater or Equal | `a >= b`   | 6        |
-| Signed Less Than          | `a @< b`   | 6        |
-| Signed Greater Than       | `a @> b`   | 6        |
-| Signed Less or Equal      | `a @<= b`  | 6        |
-| Signed Greater or Equal   | `a @>= b`  | 6        |
+| Signed Less Than          | `a $< b`   | 6        |
+| Signed Greater Than       | `a $> b`   | 6        |
+| Signed Less or Equal      | `a $<= b`  | 6        |
+| Signed Greater or Equal   | `a $>= b`  | 6        |
 | Logical And               | `a && b`   | 7        |
 | Logical Or                | `a \|\| b` | 7        |
 
@@ -287,7 +287,7 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 
 #### Signed Cast to N Bits
 
-`@:[N]a`, where `N` is one of `8`, `16`, `32`, or `64`, is the value of `a` converted to an `N`-bit integer type. If `a` is smaller than `N` bits, it's sign-extended to `N` bits, and if it's larger, it's truncated.
+`$:[N]a`, where `N` is one of `8`, `16`, `32`, or `64`, is the value of `a` converted to an `N`-bit integer type. If `a` is smaller than `N` bits, it's sign-extended to `N` bits, and if it's larger, it's truncated.
 
 ##### Examples
 
