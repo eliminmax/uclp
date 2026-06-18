@@ -403,7 +403,7 @@ By default, operations are assumed to follow unsigned semantics. For operations 
 
 Pointers use C-like syntax, with `*` as the dereference operator, and `&` as the address operator.
 
-Unlike C, however, the pointer is part of the type, not the binding, so instead of declaring a pointer "i" to an `i8` with `let *i: i8;`, the syntax is `let i: *i8`. When declaring a function `foo` which takes a pointer to an `i8` in a parameter called "ptr_arg", the syntax is  `func foo(*i8 ptr_arg)`.
+Unlike C, however, the pointer is part of the type, not the binding, so instead of declaring a pointer "i" to an `i8` with `let *i: i8;`, the syntax is `let i: *i8`. When declaring a function `foo` which takes a pointer to an `i8` in a parameter called "ptr_arg", the syntax is `func foo(*i8 ptr_arg)`.
 
 ### Pointer Alignment
 
@@ -472,7 +472,7 @@ Because C functions are called using the SYSV calling convention for the AMD64 a
 
 Accessing foreign data and functions is done using a simple `dlsym`-based approach, resulting in a rather leaky abstraction.
 
-To declare foreign functions or data, `dynamic["LIB"]` is added before the `func` or the `let` declaration, and `# "SYM"` is placed after the name of the foreign object, where "LIB" is the filename of the shared object to pass to `dlopen`, and "SYM" is the symbol within that object.
+To declare foreign functions or data, `dynamic["LIB"]` is added before the `func` or the `let` declaration, and `# "SYM"` may be placed after the name of the foreign object, where "LIB" is the filename of the shared object to pass to `dlopen`, and "`SYM`" is the symbol within that object. If "`SYM`" is omitted, then the name used in UCLP is also used as the symbol.
 
 #### Example: `libcpuinfo`
 
@@ -490,9 +490,9 @@ void cpuinfo_deinitialize(void);
 On Debian 13, the shared object for libcpuinfo is `libcpuinfo.so.0`, so to use those functions in UCLP, the following declarations would be needed.
 
 ```uclp
-dynamic["libcpuinfo.so.0"] func cpuinfo_init # "cpuinfo_initialize" () -> i8;
+dynamic["libcpuinfo.so.0"] func cpuinfo_initialize () -> i8;
 dynamic["libcpuinfo.so.0"] func get_core_count # "cpuinfo_get_cores_count" () -> i32;
-dynamic["libcpuinfo.so.0"] func cpuinfo_deinit # "cpuinfo_deinitialize" ();
+dynamic["libcpuinfo.so.0"] func cpuinfo_deinitialize ();
 ```
 
 ### `*dynamic` Pointers
@@ -501,7 +501,7 @@ A `dynamic` function can be declared with `*dynamic` as an argument type, and/or
 
 #### Example: `malloc` and `free`
 
-To use the glibc malloc functions on most Linux systems:
+To use the glibc malloc functions on most 64-bit Linux systems:
 
 ```uclp
 dynamic["libc.so.6"] func malloc(i64 size) -> *dynamic;
@@ -541,7 +541,7 @@ dynamic["libfatstring.so.0"]
 dynamic["libfatstring.so.0"]
     func print # "print_string" (opaque.16.8 s);
 
-let print_size = print(
+print(
     join_strings(
         new_string(&"Hello, "),
         new_string(&"world!\n")
