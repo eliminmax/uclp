@@ -10,18 +10,11 @@
 
 #include "lang/types.h"
 #include "sized_string.h"
-
-// an enum (backed by uint8_t) discriminant, which, through clang attributes,
-// can be reliably used in tagged unions, with Clang static analysis enforcing
-// proper initialization
-#define TU_ENUM(tag, ...) \
-    enum [[clang::enum_extensibility(closed)]] : uint8_t { \
-        __VA_ARGS__ \
-    } tag [[clang::require_explicit_initialization]]
+#include "tagged_union.h"
 
 // the destination of an assignment
 struct place {
-    TU_ENUM(tag, PLACE_VAR, PLACE_PTR, PLACE_ARR_MEM);
+    TU_ENUM(tag, uint8_t, PLACE_VAR, PLACE_PTR, PLACE_ARR_MEM);
 
     UCLType *_Nonnull type;
 
@@ -64,6 +57,7 @@ struct conditional {
 struct statement {
     TU_ENUM(
         tag,
+        uint8_t,
         STMT_DECL,
         STMT_ASSIGN,
         STMT_BLOCK,
@@ -115,6 +109,7 @@ struct block {
 struct expression {
     TU_ENUM(
         tag,
+        uint8_t,
         // identifiers starting with "E" followed by a number or another
         // upprecase letter are reserved for system errors
         XPR_LITERAL,
@@ -128,6 +123,7 @@ struct expression {
         struct unary_expression {
             TU_ENUM(
                 tag,
+                uint8_t,
                 UNARY_LOGNOT,
                 UNARY_BITNOT,
                 UNARY_NEG,
@@ -142,6 +138,7 @@ struct expression {
         struct binary_expression {
             TU_ENUM(
                 tag,
+                uint8_t,
                 BINARY_MUL_U,
                 BINARY_DIV_U,
                 BINARY_MOD_U,
@@ -191,7 +188,7 @@ struct function_arg {
 
 // A function declaration
 struct function_decl {
-    TU_ENUM(tag, FUNC_INTERNAL, FUNC_DYNAMIC);
+    TU_ENUM(tag, uint8_t, FUNC_INTERNAL, FUNC_DYNAMIC);
     String name;
     uint8_t nargs;
 
