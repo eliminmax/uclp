@@ -81,7 +81,7 @@ static void finalize(struct token_sequence_builder *builder) {
 #define YY_DECL \
     void yylex( \
         struct token_sequence_builder *builder, \
-        AllocGroup allocator, \
+        AllocGroup ag, \
         yyscan_t yyscanner \
     )
 #define yyterminate() \
@@ -296,7 +296,7 @@ struct token_sequence tokenize(
 }
 #endif
 
-static String current_lexeme(yyscan_t scn, AllocrGroup ag) {
+static String current_lexeme(yyscan_t scn, AllocGroup ag) {
     int len = yyget_leng(scn);
     assert(len >= 0);
 
