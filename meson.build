@@ -18,7 +18,7 @@ incdir = include_directories('include')
 lex = find_program('flex')
 lex_yy_c = custom_target('lex.yy.c',
   output : 'lex.yy.c',
-  input : 'compiler/scan.lex',
+  input : 'src/scan.lex',
   command : [lex, '-o@OUTPUT@', '@INPUT@', ],
 )
 
@@ -62,8 +62,8 @@ custom_target('binfmt:ucf.conf',
 
 executable('uclpc',
   lex_yy_c,
-  'compiler/hash.c',
-  'compiler/main.c',
+  'src/hash.c',
+  'src/main.c',
   include_directories : incdir,
   install: true,
 )
