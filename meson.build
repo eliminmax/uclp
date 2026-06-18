@@ -22,9 +22,11 @@ lex_yy_c = custom_target('lex.yy.c',
   command : [lex, '-o@OUTPUT@', '@INPUT@', ],
 )
 
+mem_handlers = ['src/mem/arena.c', 'src/mem/checked.c', 'src/mem/dynarray.c']
+
 executable('uclp_scanner',
   lex_yy_c,
-  'src/mem/arena.c',
+  mem_handlers,
   include_directories : incdir,
   c_args : ['-DSCANNER_STANDALONE'],
   install : false,
@@ -65,7 +67,7 @@ executable('uclpc',
   lex_yy_c,
   'src/hash.c',
   'src/main.c',
-  'src/mem/arena.c',
+  mem_handlers,
   include_directories : incdir,
   install: true,
 )

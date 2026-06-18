@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "alloc.h"
+#include "mem/checked.h"
 #include "hash.h"
 #include "sized_string.h"
 

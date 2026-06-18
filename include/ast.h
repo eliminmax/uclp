@@ -223,9 +223,7 @@ typedef struct ast {
     struct top_level_statement *_Nonnull root [[clang::counted_by(len)]];
 } Ast;
 
-#undef TU_ENUM
-
-#include "alloc.h"
+#include "mem/arena.h"
 #include "token.h"
 
 typedef enum [[clang::enum_extensibility(open)]] {

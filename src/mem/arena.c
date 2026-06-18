@@ -10,7 +10,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "alloc.h"
+#include "mem/arena.h"
+#include "mem/checked.h"
 static constexpr size_t ALLOC_SEGMENT_SIZE = sizeof(intmax_t[0x1000]);
 // the maximum size to keep within a segment
 static constexpr size_t MAX_ALLOC_INLINE_SIZE = ALLOC_SEGMENT_SIZE / 2;

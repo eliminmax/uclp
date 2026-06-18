@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "alloc.h"
+#include "mem/arena.h"
 #include "sized_string.h"
 
 #define DEFINE_TOKENS

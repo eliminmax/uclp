@@ -19,7 +19,8 @@
 
 #include "sized_string.h"
 #include "token.h"
-#include "alloc.h"
+#include "mem/arena.h"
+#include "mem/checked.h"
 
 struct token_sequence_builder {
     struct token_sequence sequence;
@@ -256,17 +257,6 @@ int main(int argc, char **argv) {
 
 extern inline void destroy_token(Token);
 extern inline void destroy_token_sequence(struct token_sequence);
-
-[[gnu::returns_nonnull]]
-extern inline void *checked_calloc(size_t, size_t);
-[[gnu::returns_nonnull]]
-extern inline void *checked_malloc(size_t);
-[[gnu::returns_nonnull]]
-extern inline void *checked_realloc(void *_Nullable, size_t);
-[[gnu::returns_nonnull]]
-extern inline void *checked_reallocarray(void *_Nullable, size_t, size_t);
-[[gnu::returns_nonnull]]
-extern inline void *checked_aligned_alloc(size_t, size_t);
 
 #else
 
