@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+ * SPDX-FileCopyrightText: 2025 - 2026 Eli Array Minkoff
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
@@ -20,160 +20,121 @@ switch (TOK.type) {
 
 // bracket-like tokens
 
-// "[", except when in casts
-TOKEN(L_SQUARE)
-// "]", except when in casts
-TOKEN(R_SQUARE)
-// "{"
-TOKEN(L_CURLY)
-// "}"
-TOKEN(R_CURLY)
-// "("
-TOKEN(L_PAREN)
-// ")"
-TOKEN(R_PAREN)
+TOKEN(L_SQUARE) // "["
+TOKEN(R_SQUARE) // "]"
+TOKEN(L_CURLY) // "{"
+TOKEN(R_CURLY) // "}"
+TOKEN(L_PAREN) // "("
+TOKEN(R_PAREN) // ")"
 
 // arithmetic tokens
 
-// "+"
-TOKEN(ARITH_PLUS)
-// standalone "-"
-TOKEN(ARITH_MINUS)
-// standalone "*"
-TOKEN(ARITH_MUL)
-// standalone "/"
-TOKEN(ARITH_DIV)
-// standalone "%"
-TOKEN(ARITH_MOD)
-// "$*"
-TOKEN(ARITH_SIGNED_MUL)
-// "$/"
-TOKEN(ARITH_SIGNED_DIV)
-// "$%"
-TOKEN(ARITH_SIGNED_MOD)
+TOKEN(PLUS) // "+"
+TOKEN(MINUS) // "-"
+TOKEN(MUL) // "*"
+TOKEN(DIV) // "/"
+TOKEN(MOD) // "%"
+TOKEN(SIGNED_MUL) // "$*"
+TOKEN(SIGNED_DIV) // "$/"
+TOKEN(SIGNED_MOD) // "$%"
+TOKEN(PLUS_ASSIGN) // "+="
+TOKEN(MINUS_ASSIGN) // "-="
+TOKEN(MUL_ASSIGN) // "*="
+TOKEN(DIV_ASSIGN) // "/="
+TOKEN(MOD_ASSIGN) // "%="
+TOKEN(SIGNED_MUL_ASSIGN) // "$*="
+TOKEN(SIGNED_DIV_ASSIGN) // "$/="
+TOKEN(SIGNED_MOD_ASSIGN) // "$%="
+
 
 // comparison tokens
 
-// "=="
-TOKEN(CMP_EQ)
-// "!="
-TOKEN(CMP_NE)
-// standalone "<"
-TOKEN(CMP_LT)
-// standalone ">"
-TOKEN(CMP_GT)
-// "<="
-TOKEN(CMP_LE)
-// ">="
-TOKEN(CMP_GE)
-// "$<"
-TOKEN(CMP_SIGNED_LT)
-// "$>"
-TOKEN(CMP_SIGNED_GT)
-// "$<="
-TOKEN(CMP_SIGNED_LE)
-// "$>="
-TOKEN(CMP_SIGNED_GE)
+TOKEN(EQ) // "=="
+TOKEN(NE) // "!="
+TOKEN(LT) // "<"
+TOKEN(GT) // ">"
+TOKEN(LE) // "<="
+TOKEN(GE) // ">="
+TOKEN(SIGNED_LT) // "$<"
+TOKEN(SIGNED_GT) // "$>"
+TOKEN(SIGNED_LE) // "$<="
+TOKEN(SIGNED_GE) // "$>="
 
 // pointer operations
 
-// ".*"
-TOKEN(DEREF)
-// ".&"
-TOKEN(REF)
+TOKEN(DEREF) // ".*"
+TOKEN(REF) // ".&"
 
-// "&&"
-TOKEN(LOGICAL_AND)
-// "||"
-TOKEN(LOGICAL_OR)
+TOKEN(LOGICAL_AND) // "&&"
+TOKEN(LOGICAL_OR) // "||"
 
 // bitwise operations
 
-// standalone "&"
-TOKEN(BIT_AND)
-// "~",
-TOKEN(BIT_NOT)
-// standalone "|"
-TOKEN(BIT_OR)
-// "^"
-TOKEN(BIT_XOR)
+TOKEN(BIT_NOT) // "~",
+
+TOKEN(BIT_AND) // "&"
+TOKEN(BIT_OR) // "|"
+TOKEN(BIT_XOR) // "^"
+
+TOKEN(BIT_AND_ASSIGN) // "&="
+TOKEN(BIT_OR_ASSIGN) // "|="
+TOKEN(BIT_XOR_ASSIGN) // "^="
 
 // bit shifts
 
-// ">>"
-TOKEN(SHR_LOG)
-// "$>>"
-TOKEN(SHR_ARITH)
-// "<<"
-TOKEN(SHL)
+TOKEN(SHR_LOG) // ">>"
+TOKEN(SHR_ARITH) // "$>>"
+TOKEN(SHL) // "<<"
+
+TOKEN(SHR_LOG_ASSIGN) // ">>="
+TOKEN(SHR_ARITH_ASSIGN) // "$>>="
+TOKEN(SHL_ASSIGN) // "<<="
+
 
 // misc. tokens
 
-// "#"
-TOKEN(POUND_SIGN)
-// "->"
-TOKEN(ARROW)
-// ";"
-TOKEN(SEMICOLON)
-// ":"
-TOKEN(COLON)
-// standalone "="
-TOKEN(ASSIGN)
-// ","
-TOKEN(COMMA)
+TOKEN(POUND_SIGN) // "#"
+TOKEN(ARROW) // "->"
+TOKEN(SEMICOLON) // ";"
+TOKEN(COLON) // ":"
+TOKEN(ASSIGN) // "="
+TOKEN(COMMA) // ","
 
 // casts
 
-// ":["
-TOKEN(UNSIGNED_CAST)
-// "$:["
-TOKEN(SIGNED_CAST)
+TOKEN(UNSIGNED_CAST) // ":["
+TOKEN(SIGNED_CAST) // "$:["
 
 // keyword tokens
 
-// "let"
-TOKEN(KW_LET)
-// "static"
-TOKEN(KW_STATIC)
-// "func"
-TOKEN(KW_FUNC)
-// "if"
-TOKEN(KW_IF)
-// "elif"
-TOKEN(KW_ELIF)
-// "else"
-TOKEN(KW_ELSE)
-// "while"
-TOKEN(KW_WHILE)
-// "foreach"
-TOKEN(KW_FOREACH)
-// "in"
-TOKEN(KW_IN)
-// "dynamic"
-TOKEN(KW_DYNAMIC)
-// "opaque"
-TOKEN(KW_OPAQUE)
-// "i8"
-TOKEN(KW_I8)
-// "i16"
-TOKEN(KW_I16)
-// "i32"
-TOKEN(KW_I32)
-// "i64"
-TOKEN(KW_I64)
+TOKEN(LET) // "let"
+TOKEN(STATIC) // "static"
+TOKEN(FUNC) // "func"
+TOKEN(IF) // "if"
+TOKEN(ELIF) // "elif"
+TOKEN(ELSE) // "else"
+TOKEN(WHILE) // "while"
+TOKEN(FOREACH) // "foreach"
+TOKEN(IN) // "in"
+TOKEN(DYNAMIC) // "dynamic"
+TOKEN(OPAQUE) // "opaque"
+TOKEN(I8) // "i8"
+TOKEN(I16) // "i16"
+TOKEN(I32) // "i32"
+TOKEN(I64) // "i64"
 
 // literal tokens
-TOKEN(LITERAL_STR)
-TOKEN(LITERAL_CHAR)
-TOKEN(LITERAL_INT_DEC)
-TOKEN(LITERAL_INT_BIN)
-TOKEN(LITERAL_INT_OCT)
-TOKEN(LITERAL_INT_HEX)
+TOKEN(STR)
+TOKEN(CHAR)
+TOKEN(INT_DEC)
+TOKEN(INT_BIN)
+TOKEN(INT_OCT)
+TOKEN(INT_HEX)
 
-TOKEN(IDENT)
+TOKEN(IDENT)  // identifier
 
-// unparsable token
-TOKEN(UNPARSEABLE)
+TOKEN(UNPARSEABLE) // unparseable character/s
+TOKEN(EOF)
 #undef TOKEN
 #ifdef DEFINE_TOKENS
 #undef DEFINE_TOKENS
