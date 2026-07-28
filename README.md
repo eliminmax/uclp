@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+SPDX-FileCopyrightText: 2025 - 2026 Eli Array Minkoff
 
 SPDX-License-Identifier: 0BSD
 -->
@@ -21,12 +21,13 @@ ALL INFORMATION IN THIS DOCUMENT IS PROVISIONAL AND SUBJECT TO CHANGE. THIS REPO
 * [ ] A minimal type system with support for signed and unsigned sized integer types, and fixed-size byte buffers.
 * [ ] Support for `while` loops, as well as `if` and `if-else` statements.
 * [ ] Compiles to a custom binary format, which contains machine code. Basic I/O can be done using the `read` and `write` Linux system calls on `stdin` and `stdout`, respectively.
-* [ ] Limited FFI support - an array of external functions can be declared, if they only have supported types. The architecture's SYSV ABI is used.
-* [ ] Build an interpreter with debug traces.
+* [ ] Limited FFI support - external functions can be declared, if they only have supported types. The architecture's SYSV ABI is used.
+* [ ] Build an interpreter with debug tracing.
+* [ ] Support for Linux system calls as functions
 
 ### Binary Format Goals
 
-* [ ] Uses a small subset of `x86_64` machine code as the encoded instruction format.
+* [ ] Use a subset of `x86_64` machine code as the encoded instruction format.
 * [x] Simple header format, declaring the following:
  * [x] Entry point
  * [x] Information needed for the loader or interpreter to properly call `dlopen` and `dlsym`
@@ -41,8 +42,9 @@ ALL INFORMATION IN THIS DOCUMENT IS PROVISIONAL AND SUBJECT TO CHANGE. THIS REPO
 
 ### Non-goals
 
-* Support for floating point types, classes, structs, or advanced types
-* Dynamic allocation
+* Support for floating point types, classes, structs, or advanced type system trickery
+* Built-in support for dynamic allocation
+  * The use of the FFI system enables the use of `malloc` and its associated functions
 * Efficient codegen
 * Macro support
 * Fast compile times
@@ -56,4 +58,4 @@ ALL INFORMATION IN THIS DOCUMENT IS PROVISIONAL AND SUBJECT TO CHANGE. THIS REPO
 Ideas that may or may not become goals in the future
 * File I/O (yes, everything is a file, but you know what I mean by this).
 * Support for FFI on non-`glibc` Linux systems
-* Support for Linux system calls as functions
+* Debug info generation
