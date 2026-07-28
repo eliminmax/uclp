@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+ * SPDX-FileCopyrightText: 2025 - 2026 Eli Array Minkoff
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
@@ -12,14 +12,7 @@
 #define UCF_MAGIC "\xf8UCF"
 #define UCF_VERSION_DEV 0
 
-#if !__has_c_attribute(gnu::packed)
-#error "Missing required GNU struct attribute packed"
-#endif
-#if !__has_c_attribute(gnu::aligned)
-#error "Missing required GNU struct attribute aligned"
-#endif
-
-typedef struct [[gnu::packed]] [[gnu::aligned(8)]] {
+typedef struct Header {
     // magic bytes identifying the file type - must be set to UCF_MAGIC
     char magic[4];
     // version number
@@ -36,7 +29,9 @@ typedef struct [[gnu::packed]] [[gnu::aligned(8)]] {
     uint64_t code_size;
 } Header;
 
-typedef struct {
+static_assert(sizeof(Header) == 32);
+
+typedef struct FFIFunc {
     // The index within the array of dynamic library handles
     uint8_t handle_index;
     // The NULL-terminated symbol to load from the handle
