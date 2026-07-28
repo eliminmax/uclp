@@ -65,6 +65,7 @@ TOKEN(SIGNED_GE) // "$>="
 TOKEN(DEREF) // ".*"
 TOKEN(REF) // ".&"
 
+TOKEN(LOGICAL_NOT) // "!"
 TOKEN(LOGICAL_AND) // "&&"
 TOKEN(LOGICAL_OR) // "||"
 
