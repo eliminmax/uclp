@@ -102,6 +102,7 @@ extern name = [ "#", sp, string literal, sp ];
 
 extern variable = dynamic prefix, let ident, extern name, ":", sp, TYPE ;
 extern function = dynamic prefix, func ident, extern name, params, ";" ;
+linux syscall = "linux", func ident, params, ";";
 param = TYPE, whitespace, identifier, sp ;
 params = "(", { param, "," }, [ param ], ")", sp ;
 
