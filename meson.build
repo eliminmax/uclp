@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+# SPDX-FileCopyrightText: 2025 - 2026 Eli Array Minkoff
 #
 # SPDX-License-Identifier: GPL-3.0-only
 
@@ -16,6 +16,10 @@ endif
 incdir = include_directories('include')
 
 mem_handlers = ['src/mem/arena.c', 'src/mem/checked.c', 'src/mem/dynarray.c']
+all_sources = [
+  'src/main.c', 'src/hash.c', 'src/table.c',
+  'src/colorize.c', 'src/scanner.c', mem_handlers
+]
 
 executable('ucf_loader',
   'resources/ucf_loader.c',
@@ -49,21 +53,13 @@ custom_target('binfmt:ucf.conf',
 )
 
 executable('uclpc',
-  'src/main.c',
-  'src/hash.c',
-  'src/colorize.c',
-  'src/scanner.c',
-  mem_handlers,
+  all_sources,
   include_directories : incdir,
   install: true,
 )
 
 executable('uclpc.ubsan',
-  'src/main.c',
-  'src/hash.c',
-  'src/colorize.c',
-  'src/scanner.c',
-  mem_handlers,
+  all_sources,
   c_args: ['-fsanitize=undefined,address'],
   link_args: ['-fsanitize=undefined,address'],
   include_directories: incdir,
