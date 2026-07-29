@@ -44,7 +44,7 @@ Scanner start_scanner(String source) {
     Scanner s = checked_malloc(sizeof(struct scanner));
     s->line = 1;
     s->source_size = source.len;
-    s->line_start = s->start = s->head = s->source = (uchar*)source.text;
+    s->line_start = s->start = s->head = s->source = (uchar *)source.text;
     s->end = &s->source[s->source_size];
     return s;
 }
@@ -55,6 +55,12 @@ static void scan_error(USE Scanner s, const char *_Nonnull fmt, ...) {
     REQUIRE(*s->start < 0x80);
 
     uchar *line_end = s->head;
+
+    static const char *ERR_HL, *HL_END;
+    // bold; red; underlined
+    if (!ERR_HL) ERR_HL = select_color(stderr, "\x1b[1;31;4m");
+    if (!HL_END) HL_END = select_color(stderr, "\x1b[m");
+
     while (line_end < s->end && *line_end != '\n') line_end++;
 
     ptrdiff_t prefix_len = s->start - s->line_start;
@@ -63,7 +69,9 @@ static void scan_error(USE Scanner s, const char *_Nonnull fmt, ...) {
 
     va_list fmt_args;
     va_start(fmt_args, fmt);
+    if (*ERR_HL) fputs(ERR_HL, stderr);
     vfprintf(stderr, fmt, fmt_args);
+    if (*HL_END) fputs(HL_END, stderr);
     va_end(fmt_args);
 
     if (token_len > MAX_ERR_TOKEN_SIZE || prefix_len > MAX_ERR_TOKEN_SIZE ||
@@ -75,20 +83,22 @@ static void scan_error(USE Scanner s, const char *_Nonnull fmt, ...) {
     fprintf(stderr, "  (line %zu):\n", s->line);
     // dim italics
     write_color(s->line_start, stderr, prefix_len, "2;3");
-    // bold red
-    write_color(s->start, stderr, token_len, "1;31");
+    // bold black on yellow
+    write_color(s->start, stderr, token_len, "1;43;30");
     write_color(s->head, stderr, suffix_len, "2;3");
     fputc('\n', stderr);
     longjmp(s->jump_buf, 1);
 }
 
 static int peek(USE Scanner s) {
-    if (s->head + 1 < s->end) [[clang::likely]] return s->head[0];
+    if (s->head + 1 < s->end) [[clang::likely]]
+        return s->head[0];
     return -1;
 }
 
 static int peek2(USE Scanner s) {
-    if (s->head + 2 < s->end) [[clang::likely]] return s->head[1];
+    if (s->head + 2 < s->end) [[clang::likely]]
+        return s->head[1];
     return -1;
 }
 
@@ -300,8 +310,7 @@ static String get_lexeme(USE Scanner s) {
 // Don't use locale-sensitive <ctype.h> functions for checks that should not be
 // locale-dependent
 
-[[gnu::const]]
-[[gnu::artificial]]
+[[gnu::const]] [[gnu::artificial]]
 static inline bool is_in_range(int c, int start, int end) {
     return c >= start && c <= end;
 }
@@ -365,7 +374,9 @@ static EscapedChr esc_chr(uchar c) {
     return buf;
 }
 
-static void scan_escape_char(const char *literal_type, uchar end, USE Scanner s) {
+static void scan_escape_char(
+    const char *literal_type, uchar end, USE Scanner s
+) {
     int chr;
     int next;
     uchar *esc_start = s->head;
@@ -736,7 +747,9 @@ static enum token_type next_token_type(USE Scanner s) {
             } else if (s->head[-1] >= '0' && s->head[-1] <= '9') {
                 return scan_dec(s);
             }
-            scan_error(s, "Unexpected character '%s'", esc_chr(*s->head).text);
+            scan_error(
+                s, "Unexpected character: '%s'", esc_chr(s->head[-1]).text
+            );
     }
 }
 
