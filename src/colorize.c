@@ -67,7 +67,7 @@ static void resolve_color_funcs() {
         }
         case COLOR_NEVER:
             write_color = write_color_ignore;
-            select_color = select_color_if_tty;
+            select_color = select_color_ignore;
             break;
         case COLOR_ALWAYS:
             write_color = write_color_real;
