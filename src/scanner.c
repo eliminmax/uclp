@@ -300,7 +300,9 @@ static String get_lexeme(USE Scanner s) {
 // Don't use locale-sensitive <ctype.h> functions for checks that should not be
 // locale-dependent
 
-static bool is_in_range(int c, int start, int end) {
+[[gnu::const]]
+[[gnu::artificial]]
+static inline bool is_in_range(int c, int start, int end) {
     return c >= start && c <= end;
 }
 
@@ -571,37 +573,62 @@ static enum token_type read_size_suf(enum token_type base, USE Scanner s) {
 
 static enum token_type scan_bin(USE Scanner s) {
     advance(s);
-    while (is_bin_digit(peek(s))) {
-        advance(s);
-        if (is_bin_digit(peek2(s))) advance_on('_', s);
+    if (!is_bin_digit(advance(s))) {
+        scan_error(s, "Expect at least 1 digit after prefix");
     }
-    return read_size_suf(TOKEN_INT_BIN, s);
+    while (true) {
+        if (is_bin_digit(peek(s))) {
+            s->head += 1;
+        } else if (peek(s) == '_' && is_bin_digit(peek2(s))) {
+            s->head += 2;
+        } else {
+            return read_size_suf(TOKEN_INT_BIN, s);
+        }
+    }
 }
 
 static enum token_type scan_oct(USE Scanner s) {
     advance(s);
-    while (is_oct_digit(peek(s))) {
-        advance(s);
-        if (is_oct_digit(peek2(s))) advance_on('_', s);
+    if (!is_oct_digit(advance(s))) {
+        scan_error(s, "Expect at least 1 digit after prefix");
     }
-    return read_size_suf(TOKEN_INT_OCT, s);
+    while (true) {
+        if (is_oct_digit(peek(s))) {
+            s->head += 1;
+        } else if (peek(s) == '_' && is_oct_digit(peek2(s))) {
+            s->head += 2;
+        } else {
+            return read_size_suf(TOKEN_INT_OCT, s);
+        }
+    }
 }
 
 static enum token_type scan_dec(USE Scanner s) {
-    while (is_dec_digit(peek(s))) {
-        advance(s);
-        if (is_dec_digit(peek2(s))) advance_on('_', s);
+    while (true) {
+        if (is_dec_digit(peek(s))) {
+            s->head += 1;
+        } else if (peek(s) == '_' && is_dec_digit(peek2(s))) {
+            s->head += 2;
+        } else {
+            return read_size_suf(TOKEN_INT_DEC, s);
+        }
     }
-    return read_size_suf(TOKEN_INT_DEC, s);
 }
 
 static enum token_type scan_hex(USE Scanner s) {
     advance(s);
-    while (is_hex_digit(peek(s))) {
-        advance(s);
-        if (is_hex_digit(peek2(s))) advance_on('_', s);
+    if (!is_hex_digit(advance(s))) {
+        scan_error(s, "Expect at least 1 digit after prefix");
     }
-    return read_size_suf(TOKEN_INT_HEX, s);
+    while (true) {
+        if (is_hex_digit(peek(s))) {
+            s->head += 1;
+        } else if (peek(s) == '_' && is_hex_digit(peek2(s))) {
+            s->head += 2;
+        } else {
+            return read_size_suf(TOKEN_INT_HEX, s);
+        }
+    }
 }
 
 static enum token_type next_token_type(USE Scanner s) {
@@ -706,7 +733,7 @@ static enum token_type next_token_type(USE Scanner s) {
         default:
             if (is_ident_start(s->head[-1])) {
                 return scan_word(s);
-            } else if (s->head[-1] >= '0' && s->head[1] <= '9') {
+            } else if (s->head[-1] >= '0' && s->head[-1] <= '9') {
                 return scan_dec(s);
             }
             scan_error(s, "Unexpected character '%s'", esc_chr(*s->head).text);
