@@ -172,6 +172,7 @@ static const String LITERALS[TOKEN_EOF + 1] = {
     [TOKEN_MINUS]                 = LITERAL("-"),
     [TOKEN_REF]                   = LITERAL(".&"),
     [TOKEN_DEREF]                 = LITERAL(".*"),
+    [TOKEN_DOT]                   = LITERAL("."),
     [TOKEN_DIV_ASSIGN]            = LITERAL("/="),
     [TOKEN_DIV]                   = LITERAL("/"),
     [TOKEN_UNSIGNED_BITCAST_8]    = LITERAL(":[8]"),
@@ -201,8 +202,8 @@ static const String LITERALS[TOKEN_EOF + 1] = {
     [TOKEN_BIT_OR]                = LITERAL("|"),
     [TOKEN_R_CURLY]               = LITERAL("}"),
     // keywords last
+    [TOKEN_BREAK]                 = LITERAL("break"),
     [TOKEN_DYNAMIC]               = LITERAL("dynamic"),
-    [TOKEN_ELIF]                  = LITERAL("elif"),
     [TOKEN_ELSE]                  = LITERAL("else"),
     [TOKEN_FOREACH]               = LITERAL("foreach"),
     [TOKEN_FUNC]                  = LITERAL("func"),
@@ -213,12 +214,15 @@ static const String LITERALS[TOKEN_EOF + 1] = {
     [TOKEN_IF]                    = LITERAL("if"),
     [TOKEN_IN]                    = LITERAL("in"),
     [TOKEN_LET]                   = LITERAL("let"),
-    [TOKEN_LINUX]                 = LITERAL("linux"),
-    [TOKEN_OPAQUE]                = LITERAL("opaque"),
+    [TOKEN_OPAQUE_8]              = DYNAMIC,
+    [TOKEN_OPAQUE_16]             = DYNAMIC,
+    [TOKEN_OPAQUE_32]             = DYNAMIC,
+    [TOKEN_OPAQUE_64]             = DYNAMIC,
     [TOKEN_STATIC]                = LITERAL("static"),
     [TOKEN_WHILE]                 = LITERAL("while"),
-    // leave the rest, and UNPARSEABLE as {0, NULL}
-    [TOKEN_INT_BIN ... TOKEN_EOF] = DYNAMIC,
+    [TOKEN_EOF]                  = LITERAL(""),
+    // leave the rest as {0, NULL}
+    [TOKEN_INT_BIN ... TOKEN_UNPARSEABLE] = DYNAMIC,
 };
 // clang-format on
 #undef DYNAMIC
@@ -401,90 +405,6 @@ static void scan_escape_char(
 eof:
     scan_error(s, "End of file in %s literal", literal_type);
 }
-
-// SPDX-SnippetCopyrightText: 2026 Eli Array Minkoff
-// SPDX-SnippetCopyrightText: 2015 Robert Nystrom
-//
-// SPDX-License-Identifier: MIT
-
-// A port of `checkKeyword` from clox (in Nystrom's Crafting Interpreters)
-static enum token_type check_keyword(
-    int start, int len, const char *rest, enum token_type type, USE Scanner s
-) {
-    if (s->head - s->start == start + len &&
-        memcmp(s->start + start, rest, len) == 0) {
-        return type;
-    }
-
-    return TOKEN_IDENT;
-}
-
-// includes a port of `identifierType` from Nystrom's Crafting Interpreters
-static enum token_type scan_word(USE Scanner s) {
-    ptrdiff_t sz;
-    while (is_ident_chr(peek(s))) advance(s);
-    switch (*s->start) {
-        case 'd':
-            return check_keyword(1, 6, "ynamic", TOKEN_DYNAMIC, s);
-        case 'e':
-            if (s->head - s->start == 4 && s->start[1] == 'l') {
-                if (s->start[2] == 'i' && s->start[3] == 'f') {
-                    return TOKEN_ELIF;
-                } else if (s->start[2] == 's' && s->start[3] == 'e') {
-                    return TOKEN_ELSE;
-                }
-            }
-            break;
-        case 'f':
-            if (s->head - s->start > 1) {
-                switch (s->start[1]) {
-                    case 'o':
-                        return check_keyword(1, 6, "oreach", TOKEN_FOREACH, s);
-                    case 'u':
-                        return check_keyword(1, 3, "unc", TOKEN_FUNC, s);
-                }
-            }
-            break;
-        case 'i':
-            if ((sz = s->head - s->start) > 1) {
-                switch (s->start[1]) {
-                    case '1':
-                        return check_keyword(2, 1, "6", TOKEN_I16, s);
-                    case '3':
-                        return check_keyword(2, 1, "2", TOKEN_I32, s);
-                    case '6':
-                        return check_keyword(2, 1, "4", TOKEN_I64, s);
-                    case '8':
-                        return sz == 2 ? TOKEN_I8 : TOKEN_IDENT;
-                    case 'f':
-                        return sz == 2 ? TOKEN_IF : TOKEN_IDENT;
-                    case 'n':
-                        return sz == 2 ? TOKEN_IN : TOKEN_IDENT;
-                }
-            }
-            break;
-        case 'l':
-            if (s->head - s->start > 1) {
-                switch (s->start[1]) {
-                    case 'e':
-                        return check_keyword(2, 1, "t", TOKEN_LET, s);
-                    case 'i':
-                        return check_keyword(2, 3, "nux", TOKEN_LINUX, s);
-                }
-            }
-            break;
-        case 'o':
-            return check_keyword(1, 5, "paque", TOKEN_OPAQUE, s);
-        case 's':
-            return check_keyword(1, 5, "tatic", TOKEN_STATIC, s);
-        case 'w':
-            return check_keyword(1, 4, "hile", TOKEN_WHILE, s);
-    }
-    return TOKEN_IDENT;
-}
-
-// SPDX-SnippetEnd
-
 static void scan_string_literal(USE Scanner s) {
     while (!advance_on('"', s)) {
         switch (peek(s)) {
@@ -530,7 +450,7 @@ static void scan_char_literal(USE Scanner s) {
     }
 }
 
-static enum token_type scan_size(enum token_type base, USE Scanner s) {
+static enum token_type scan_size(enum token_type base, const char *kind, USE Scanner s) {
     if (advance_on('8', s)) return base;
     if (advance_on('1', s)) {
         if (advance_on('6', s)) return base + 1;
@@ -542,7 +462,7 @@ static enum token_type scan_size(enum token_type base, USE Scanner s) {
         if (advance_on('4', s)) return base + 3;
     }
     while (is_dec_digit(peek(s))) advance(s);
-    scan_error(s, "Invalid size");
+    scan_error(s, "Invalid %s", kind);
 }
 
 static enum token_type scan_bin(USE Scanner s) {
@@ -557,7 +477,7 @@ static enum token_type scan_bin(USE Scanner s) {
             s->head += 2;
         } else {
             if (!advance_on('#', s)) return TOKEN_INT_BIN;
-            return scan_size(TOKEN_INT_BIN_8, s);
+            return scan_size(TOKEN_INT_BIN_8, "size suffix", s);
         }
     }
 }
@@ -574,7 +494,7 @@ static enum token_type scan_oct(USE Scanner s) {
             s->head += 2;
         } else {
             if (!advance_on('#', s)) return TOKEN_INT_OCT;
-            return scan_size(TOKEN_INT_OCT_8, s);
+            return scan_size(TOKEN_INT_OCT_8, "size suffix", s);
         }
     }
 }
@@ -587,7 +507,7 @@ static enum token_type scan_dec(USE Scanner s) {
             s->head += 2;
         } else {
             if (!advance_on('#', s)) return TOKEN_INT_DEC;
-            return scan_size(TOKEN_INT_DEC_8, s);
+            return scan_size(TOKEN_INT_DEC_8, "size suffix", s);
         }
     }
 }
@@ -604,15 +524,44 @@ static enum token_type scan_hex(USE Scanner s) {
             s->head += 2;
         } else {
             if (!advance_on('#', s)) return TOKEN_INT_HEX;
-            return scan_size(TOKEN_INT_HEX_8, s);
+            return scan_size(TOKEN_INT_HEX_8, "size suffix", s);
         }
     }
 }
 
+static enum token_type scan_numeric(USE Scanner s) {
+    REQUIRE(s->head[-1] >= '0' && s->head[-1] <= '9');
+    if (s->head[-1] == '0') {
+        switch (peek(s)) {
+            case 'b': return scan_bin(s);
+            case 'o': return scan_oct(s);
+            case 'x': return scan_hex(s);
+        }
+    }
+    return scan_dec(s);
+}
+
 static enum token_type finish_cast(enum token_type base, USE Scanner s) {
-    enum token_type type = scan_size(base, s);
+    enum token_type type = scan_size(base, "bit width", s);
     if (!advance_on(']', s)) scan_error(s, "Missing end of size cast");
     return type;
+}
+
+
+static enum token_type scan_opaque(USE Scanner s) {
+    if (!advance_on('.', s)) scan_error(s, "Expect '.' in opaque type");
+    if (!is_dec_digit(peek(s))) scan_error(s, "Expect size in opaque type");
+    s->head++;
+    scan_numeric(s);
+    if (!advance_on('.', s)) scan_error(s, "Expect '.' in opaque type");
+    return scan_size(TOKEN_OPAQUE_8, "alignment", s);
+}
+
+static void scan_syscall(USE Scanner s) {
+    if (!advance_on('.', s)) scan_error(s, "Expect '.' in syscall");
+    if (!is_ident_start(peek(s))) scan_error(s, "Expect syscall name");
+    s->head++;
+    while (is_ident_chr(peek(s))) s->head++;
 }
 
 static enum token_type signed_op(USE Scanner s) {
@@ -647,6 +596,85 @@ static enum token_type signed_op(USE Scanner s) {
             return TOKEN_UNPARSEABLE;
     }
 }
+
+// SPDX-SnippetCopyrightText: 2026 Eli Array Minkoff
+// SPDX-SnippetCopyrightText: 2015 Robert Nystrom
+//
+// SPDX-License-Identifier: MIT
+
+// A port of `checkKeyword` from clox (in Nystrom's Crafting Interpreters)
+static enum token_type check_keyword(
+    int start, int len, const char *rest, enum token_type type, USE Scanner s
+) {
+    if (s->head - s->start == start + len &&
+        memcmp(s->start + start, rest, len) == 0) {
+        return type;
+    }
+
+    return TOKEN_IDENT;
+}
+
+// includes a port of `identifierType` from Nystrom's Crafting Interpreters
+static enum token_type scan_word(USE Scanner s) {
+    ptrdiff_t sz;
+    while (is_ident_chr(peek(s))) advance(s);
+    switch (*s->start) {
+        case 'd':
+            return check_keyword(1, 6, "ynamic", TOKEN_DYNAMIC, s);
+        case 'e':
+            return check_keyword(1, 3, "lse", TOKEN_ELSE, s);
+            break;
+        case 'f':
+            if (s->head - s->start > 1) {
+                switch (s->start[1]) {
+                    case 'o':
+                        return check_keyword(1, 6, "oreach", TOKEN_FOREACH, s);
+                    case 'u':
+                        return check_keyword(1, 3, "unc", TOKEN_FUNC, s);
+                }
+            }
+            break;
+        case 'i':
+            if ((sz = s->head - s->start) > 1) {
+                switch (s->start[1]) {
+                    case '1':
+                        return check_keyword(2, 1, "6", TOKEN_I16, s);
+                    case '3':
+                        return check_keyword(2, 1, "2", TOKEN_I32, s);
+                    case '6':
+                        return check_keyword(2, 1, "4", TOKEN_I64, s);
+                    case '8':
+                        return sz == 2 ? TOKEN_I8 : TOKEN_IDENT;
+                    case 'f':
+                        return sz == 2 ? TOKEN_IF : TOKEN_IDENT;
+                    case 'n':
+                        return sz == 2 ? TOKEN_IN : TOKEN_IDENT;
+                }
+            }
+            break;
+        case 'l':
+            if (s->head - s->start > 1) {
+                return check_keyword(1, 2, "et", TOKEN_LET, s);
+            }
+            break;
+        case 'o':
+            if (s->head - s->start == 6 && memcmp(s->start, "opaque", 6) == 0) {
+                return scan_opaque(s);
+            }
+            break;
+        case 's':
+            if (s->head - s->start == 3 && memcmp(s->start, "sys", 3) == 0) {
+                scan_syscall(s);
+                return TOKEN_SYS;
+            }
+            return check_keyword(1, 5, "tatic", TOKEN_STATIC, s);
+        case 'w':
+            return check_keyword(1, 4, "hile", TOKEN_WHILE, s);
+    }
+    return TOKEN_IDENT;
+}
+
+// SPDX-SnippetEnd
 
 static enum token_type next_token_type(USE Scanner s) {
     skip_whitespace(s);
@@ -695,7 +723,7 @@ static enum token_type next_token_type(USE Scanner s) {
         case '.':
             if (advance_on('&', s)) return TOKEN_REF;
             if (advance_on('*', s)) return TOKEN_DEREF;
-            return TOKEN_UNPARSEABLE;
+            return TOKEN_DOT;
         case '/':
             if (advance_on('=', s)) return TOKEN_DIV_ASSIGN;
             return TOKEN_DIV;
@@ -739,22 +767,11 @@ static enum token_type next_token_type(USE Scanner s) {
             return TOKEN_BIT_OR;
         case '}':
             return TOKEN_R_CURLY;
-        case '0':
-            switch (peek(s)) {
-                case 'b':
-                    return scan_bin(s);
-                case 'o':
-                    return scan_oct(s);
-                case 'x':
-                    return scan_hex(s);
-                default:
-                    return scan_dec(s);
-            }
         default:
             if (is_ident_start(s->head[-1])) {
                 return scan_word(s);
             } else if (s->head[-1] >= '0' && s->head[-1] <= '9') {
-                return scan_dec(s);
+                return scan_numeric(s);
             }
             scan_error(
                 s, "Unexpected character: '%s'", esc_chr(s->head[-1]).text

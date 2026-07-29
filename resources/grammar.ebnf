@@ -24,7 +24,7 @@ escaped char = "\", (
                | [?/[0-3]/?], [octal digit], octal digit) ;
 
 unit size = "8" | "16" | "32" | "64" ;
-whitespace = ?/[ \t\n]+/? | ( inline comment, { inline comment } ) ;
+whitespace = ?/[ \t\n]+/? | ( comment, { comment } ) ;
 
 sp = { whitespace } ;
 
@@ -47,6 +47,7 @@ literal = (number literal, ["#", unit size]) | char literal | string literal ;
 
 inline comment = "//", { ?/./? } ;
 block comment = "/*", { ?/[^*]|\*[^/]/? }, "*/" ;
+comment = inline comment | block comment ;
 identifier = ( letter | "_" ), { letter | "_" | decimal digit } ;
 
 (*********)
@@ -56,7 +57,7 @@ identifier = ( letter | "_" ), { letter | "_" | decimal digit } ;
 integral type = "i", unit size ;
 pointer type = "*", sp, (TYPE | "dynamic") ;
 array type = TYPE, "[", sp, number literal, sp, "]" ;
-opaque type = "opaque.", number literal, ".", number literal ;
+opaque type = "opaque.", number literal, ".", unit size ;
 TYPE = (integral type | pointer type | array type | opaque type), sp ;
 
 (***************)
@@ -89,7 +90,7 @@ deref = "*", sp, EXPR ;
 (* STATEMENTS *)
 (**************)
 
-let ident = "let", whitespace, identifier, sp ;
+let ident = ( "let" | "static" ), whitespace, identifier, sp ;
 func ident = "func", whitespace, identifier, sp ;
 variable declaration = ( (let ident, ":", sp, TYPE, [ "=", sp, EXPR ]) 
                        | (let ident, "=", sp, EXPR), ";" ;
@@ -99,10 +100,10 @@ return type = [ "->", sp, TYPE ] ;
 
 dynamic prefix = "dynamic", sp, "[", sp, string literal, sp, "]", sp ;
 extern name = [ "#", sp, string literal, sp ];
+syscall = "sys.", identifier, params, sp;
 
 extern variable = dynamic prefix, let ident, extern name, ":", sp, TYPE ;
 extern function = dynamic prefix, func ident, extern name, params, ";" ;
-linux syscall = "linux", func ident, params, ";";
 param = TYPE, whitespace, identifier, sp ;
 params = "(", { param, "," }, [ param ], ")", sp ;
 
@@ -113,7 +114,7 @@ while = loop name, "while", sp, "(", sp, EXPR, ")", sp, STMT ;
 foreach = loop name, "foreach", sp, "(", identifier, sp, "in", sp, ;
 
 return = "return", sp, [ EXPR ], ";" ;
-break = "break", sp, [ identifier, sp ], ";"
+break = "break", sp, [ identifier, sp ], ";" ;
 
 expr stmt = expr, ";" ;
 

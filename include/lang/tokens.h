@@ -17,7 +17,8 @@
 switch (TOK.type) {
 #elifndef TOKEN
 #warning "define TOKEN, DEFINE_TOKENS or DEBUG_TOKENS before including tokens.h"
-#define TOKEN(T)
+enum : unsigned char {
+#define TOKEN(t) TOKEN_##t,
 #endif
 #define SIZED_TOKEN(t) \
     TOKEN(t##_8) TOKEN(t##_16) TOKEN(t##_32) TOKEN(t##_64)
@@ -98,6 +99,7 @@ TOKEN(SHL_ASSIGN) // "<<="
 
 // misc. tokens
 
+TOKEN(DOT) // "."
 TOKEN(POUND_SIGN) // "#"
 TOKEN(ARROW) // "->"
 TOKEN(SEMICOLON) // ";"
@@ -112,23 +114,23 @@ SIZED_TOKEN(SIGNED_BITCAST) // "$:[N]"
 TOKEN(TYPE_CAST) // ":{"
 
 // keyword tokens
-
-TOKEN(LET) // "let"
-TOKEN(STATIC) // "static"
-TOKEN(FUNC) // "func"
-TOKEN(IF) // "if"
-TOKEN(ELIF) // "elif"
-TOKEN(ELSE) // "else"
-TOKEN(LINUX) // "linux"
-TOKEN(WHILE) // "while"
-TOKEN(FOREACH) // "foreach"
-TOKEN(IN) // "in"
+TOKEN(BREAK) // "break"
 TOKEN(DYNAMIC) // "dynamic"
-TOKEN(OPAQUE) // "opaque"
+TOKEN(ELSE) // "else"
+TOKEN(FOREACH) // "foreach"
+TOKEN(FUNC) // "func"
 TOKEN(I8) // "i8"
 TOKEN(I16) // "i16"
 TOKEN(I32) // "i32"
 TOKEN(I64) // "i64"
+TOKEN(IF) // "if"
+TOKEN(IN) // "in"
+TOKEN(LET) // "let"
+SIZED_TOKEN(OPAQUE) // "opaque"
+TOKEN(RETURN) // "return"
+TOKEN(STATIC) // "static"
+TOKEN(SYS) // "sys"
+TOKEN(WHILE) // "while"
 
 // literal tokens
 TOKEN(STR)
@@ -150,4 +152,6 @@ TOKEN(EOF)
 #elifdef DEBUG_TOKENS
 #undef DEBUG_TOKENS
 }
+#else
+};
 #endif
