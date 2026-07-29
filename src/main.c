@@ -97,12 +97,7 @@ int main(int argc, char *argv[]) {
         char *line = NULL;
         size_t len = 0;
         ssize_t sz;
-        while ((sz = getline(&line, &len, stdin))) {
-            if (sz == -1) {
-                perror("Failed to read input");
-                free(line);
-                return 1;
-            }
+        while ((sz = getline(&line, &len, stdin)) != -1) {
             len = sz;
             Scanner scanner = start_scanner((String){len, line});
             Token t;
@@ -111,6 +106,11 @@ int main(int argc, char *argv[]) {
                 destroy_token(t);
             }
             free_scanner(scanner);
+        }
+        if (errno) {
+            perror("Failed to read input");
+            free(line);
+            return 1;
         }
         free(line);
         return 0;
