@@ -487,10 +487,11 @@ static enum token_type scan_word(USE Scanner s) {
 
 static void scan_string_literal(USE Scanner s) {
     while (!advance_on('"', s)) {
-        switch (advance(s)) {
+        switch (peek(s)) {
             case -1:
                 scan_error(s, "End of file in string literal");
             case '\\':
+                s->head++;
                 scan_escape_char("string", '"', s);
                 break;
             case '\n':
@@ -500,27 +501,29 @@ static void scan_string_literal(USE Scanner s) {
                     "advance_on('\"') would have ended the string at loop start"
                 );
             default:
-                break;
+                s->head++;
         }
     }
 }
 
 static void scan_char_literal(USE Scanner s) {
-    switch (advance(s)) {
+    switch (peek(s)) {
         case -1:
             scan_error(s, "End of file in character literal");
         case '\'':
+            s->head++;
             if (advance_on('\'', s)) {
                 scan_error(s, "''' is not a valid character literal");
             }
             scan_error(s, "Empty character literal");
         case '\\':
+            s->head++;
             scan_escape_char("character", '\'', s);
             break;
         case '\n':
             scan_error(s, "End of line in character literal");
         default:
-            break;
+            s->head++;
     }
     if (!advance_on('\'', s)) {
         scan_error(s, "Missing end of character literal");
