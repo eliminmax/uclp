@@ -134,82 +134,89 @@ static bool advance_on(char chr, USE Scanner s) {
 // longer ones, to make it easier to follow when implementing the token matching
 // logic.
 static const String LITERALS[TOKEN_EOF + 1] = {
-    [TOKEN_NE]                = LITERAL("!="),
-    [TOKEN_STR]               = DYNAMIC,
-    [TOKEN_LOGICAL_NOT]       = LITERAL("!"),
-    [TOKEN_POUND_SIGN]        = LITERAL("#"),
-    [TOKEN_SIGNED_MOD_ASSIGN] = LITERAL("$%="),
-    [TOKEN_SIGNED_MOD]        = LITERAL("$%"),
-    [TOKEN_SIGNED_MUL_ASSIGN] = LITERAL("$*="),
-    [TOKEN_SIGNED_MUL]        = LITERAL("$*"),
-    [TOKEN_SIGNED_DIV_ASSIGN] = LITERAL("$/="),
-    [TOKEN_SIGNED_DIV]        = LITERAL("$/"),
-    [TOKEN_SIGNED_CAST]       = LITERAL("$:["),
-    [TOKEN_SIGNED_LE]         = LITERAL("$<="),
-    [TOKEN_SIGNED_LT]         = LITERAL("$<"),
-    [TOKEN_SIGNED_GE]         = LITERAL("$>="),
-    [TOKEN_SHR_ARITH_ASSIGN]  = LITERAL("$>>="),
-    [TOKEN_SHR_ARITH]         = LITERAL("$>>"),
-    [TOKEN_SIGNED_GT]         = LITERAL("$>"),
-    [TOKEN_MOD_ASSIGN]        = LITERAL("%="),
-    [TOKEN_MOD]               = LITERAL("%"),
-    [TOKEN_LOGICAL_AND]       = LITERAL("&&"),
-    [TOKEN_BIT_AND_ASSIGN]    = LITERAL("&="),
-    [TOKEN_BIT_AND]           = LITERAL("&"),
-    [TOKEN_CHAR]              = DYNAMIC,
-    [TOKEN_L_PAREN]           = LITERAL("("),
-    [TOKEN_R_PAREN]           = LITERAL(")"),
-    [TOKEN_MUL_ASSIGN]        = LITERAL("*="),
-    [TOKEN_MUL]               = LITERAL("*"),
-    [TOKEN_PLUS_ASSIGN]       = LITERAL("+="),
-    [TOKEN_PLUS]              = LITERAL("+"),
-    [TOKEN_COMMA]             = LITERAL(","),
-    [TOKEN_MINUS_ASSIGN]      = LITERAL("-="),
-    [TOKEN_ARROW]             = LITERAL("->"),
-    [TOKEN_MINUS]             = LITERAL("-"),
-    [TOKEN_REF]               = LITERAL(".&"),
-    [TOKEN_DEREF]             = LITERAL(".*"),
-    [TOKEN_DIV_ASSIGN]        = LITERAL("/="),
-    [TOKEN_DIV]               = LITERAL("/"),
-    [TOKEN_UNSIGNED_CAST]     = LITERAL(":["),
-    [TOKEN_COLON]             = LITERAL(":"),
-    [TOKEN_SEMICOLON]         = LITERAL(";"),
-    [TOKEN_SHL_ASSIGN]        = LITERAL("<<="),
-    [TOKEN_SHL]               = LITERAL("<<"),
-    [TOKEN_LE]                = LITERAL("<="),
-    [TOKEN_LT]                = LITERAL("<"),
-    [TOKEN_EQ]                = LITERAL("=="),
-    [TOKEN_ASSIGN]            = LITERAL("="),
-    [TOKEN_GE]                = LITERAL(">="),
-    [TOKEN_SHR_LOG_ASSIGN]    = LITERAL(">>="),
-    [TOKEN_SHR_LOG]           = LITERAL(">>"),
-    [TOKEN_GT]                = LITERAL(">"),
-    [TOKEN_L_SQUARE]          = LITERAL("["),
-    [TOKEN_R_SQUARE]          = LITERAL("]"),
-    [TOKEN_BIT_XOR_ASSIGN]    = LITERAL("^="),
-    [TOKEN_BIT_XOR]           = LITERAL("^"),
-    [TOKEN_L_CURLY]           = LITERAL("{"),
-    [TOKEN_BIT_OR_ASSIGN]     = LITERAL("|="),
-    [TOKEN_LOGICAL_OR]        = LITERAL("||"),
-    [TOKEN_BIT_OR]            = LITERAL("|"),
-    [TOKEN_R_CURLY]           = LITERAL("}"),
+    [TOKEN_NE]                    = LITERAL("!="),
+    [TOKEN_STR]                   = DYNAMIC,
+    [TOKEN_LOGICAL_NOT]           = LITERAL("!"),
+    [TOKEN_POUND_SIGN]            = LITERAL("#"),
+    [TOKEN_SIGNED_MOD_ASSIGN]     = LITERAL("$%="),
+    [TOKEN_SIGNED_MOD]            = LITERAL("$%"),
+    [TOKEN_SIGNED_MUL_ASSIGN]     = LITERAL("$*="),
+    [TOKEN_SIGNED_MUL]            = LITERAL("$*"),
+    [TOKEN_SIGNED_DIV_ASSIGN]     = LITERAL("$/="),
+    [TOKEN_SIGNED_DIV]            = LITERAL("$/"),
+    [TOKEN_SIGNED_BITCAST_8]      = LITERAL("$:[8]"),
+    [TOKEN_SIGNED_BITCAST_16]     = LITERAL("$:[16]"),
+    [TOKEN_SIGNED_BITCAST_32]     = LITERAL("$:[32]"),
+    [TOKEN_SIGNED_BITCAST_64]     = LITERAL("$:[64]"),
+    [TOKEN_SIGNED_LE]             = LITERAL("$<="),
+    [TOKEN_SIGNED_LT]             = LITERAL("$<"),
+    [TOKEN_SIGNED_GE]             = LITERAL("$>="),
+    [TOKEN_SHR_ARITH_ASSIGN]      = LITERAL("$>>="),
+    [TOKEN_SHR_ARITH]             = LITERAL("$>>"),
+    [TOKEN_SIGNED_GT]             = LITERAL("$>"),
+    [TOKEN_MOD_ASSIGN]            = LITERAL("%="),
+    [TOKEN_MOD]                   = LITERAL("%"),
+    [TOKEN_LOGICAL_AND]           = LITERAL("&&"),
+    [TOKEN_BIT_AND_ASSIGN]        = LITERAL("&="),
+    [TOKEN_BIT_AND]               = LITERAL("&"),
+    [TOKEN_CHAR]                  = DYNAMIC,
+    [TOKEN_L_PAREN]               = LITERAL("("),
+    [TOKEN_R_PAREN]               = LITERAL(")"),
+    [TOKEN_MUL_ASSIGN]            = LITERAL("*="),
+    [TOKEN_MUL]                   = LITERAL("*"),
+    [TOKEN_PLUS_ASSIGN]           = LITERAL("+="),
+    [TOKEN_PLUS]                  = LITERAL("+"),
+    [TOKEN_COMMA]                 = LITERAL(","),
+    [TOKEN_MINUS_ASSIGN]          = LITERAL("-="),
+    [TOKEN_ARROW]                 = LITERAL("->"),
+    [TOKEN_MINUS]                 = LITERAL("-"),
+    [TOKEN_REF]                   = LITERAL(".&"),
+    [TOKEN_DEREF]                 = LITERAL(".*"),
+    [TOKEN_DIV_ASSIGN]            = LITERAL("/="),
+    [TOKEN_DIV]                   = LITERAL("/"),
+    [TOKEN_UNSIGNED_BITCAST_8]    = LITERAL(":[8]"),
+    [TOKEN_UNSIGNED_BITCAST_16]   = LITERAL(":[16]"),
+    [TOKEN_UNSIGNED_BITCAST_32]   = LITERAL(":[32]"),
+    [TOKEN_UNSIGNED_BITCAST_64]   = LITERAL(":[64]"),
+    [TOKEN_TYPE_CAST]             = LITERAL(":{"),
+    [TOKEN_COLON]                 = LITERAL(":"),
+    [TOKEN_SEMICOLON]             = LITERAL(";"),
+    [TOKEN_SHL_ASSIGN]            = LITERAL("<<="),
+    [TOKEN_SHL]                   = LITERAL("<<"),
+    [TOKEN_LE]                    = LITERAL("<="),
+    [TOKEN_LT]                    = LITERAL("<"),
+    [TOKEN_EQ]                    = LITERAL("=="),
+    [TOKEN_ASSIGN]                = LITERAL("="),
+    [TOKEN_GE]                    = LITERAL(">="),
+    [TOKEN_SHR_LOG_ASSIGN]        = LITERAL(">>="),
+    [TOKEN_SHR_LOG]               = LITERAL(">>"),
+    [TOKEN_GT]                    = LITERAL(">"),
+    [TOKEN_L_SQUARE]              = LITERAL("["),
+    [TOKEN_R_SQUARE]              = LITERAL("]"),
+    [TOKEN_BIT_XOR_ASSIGN]        = LITERAL("^="),
+    [TOKEN_BIT_XOR]               = LITERAL("^"),
+    [TOKEN_L_CURLY]               = LITERAL("{"),
+    [TOKEN_BIT_OR_ASSIGN]         = LITERAL("|="),
+    [TOKEN_LOGICAL_OR]            = LITERAL("||"),
+    [TOKEN_BIT_OR]                = LITERAL("|"),
+    [TOKEN_R_CURLY]               = LITERAL("}"),
     // keywords last
-    [TOKEN_DYNAMIC]           = LITERAL("dynamic"),
-    [TOKEN_ELIF]              = LITERAL("elif"),
-    [TOKEN_ELSE]              = LITERAL("else"),
-    [TOKEN_FOREACH]           = LITERAL("foreach"),
-    [TOKEN_FUNC]              = LITERAL("func"),
-    [TOKEN_I16]               = LITERAL("i16"),
-    [TOKEN_I32]               = LITERAL("i32"),
-    [TOKEN_I64]               = LITERAL("i64"),
-    [TOKEN_I8]                = LITERAL("i8"),
-    [TOKEN_IF]                = LITERAL("if"),
-    [TOKEN_IN]                = LITERAL("in"),
-    [TOKEN_LET]               = LITERAL("let"),
-    [TOKEN_LINUX]             = LITERAL("linux"),
-    [TOKEN_OPAQUE]            = LITERAL("opaque"),
-    [TOKEN_STATIC]            = LITERAL("static"),
-    [TOKEN_WHILE]             = LITERAL("while"),
+    [TOKEN_DYNAMIC]               = LITERAL("dynamic"),
+    [TOKEN_ELIF]                  = LITERAL("elif"),
+    [TOKEN_ELSE]                  = LITERAL("else"),
+    [TOKEN_FOREACH]               = LITERAL("foreach"),
+    [TOKEN_FUNC]                  = LITERAL("func"),
+    [TOKEN_I16]                   = LITERAL("i16"),
+    [TOKEN_I32]                   = LITERAL("i32"),
+    [TOKEN_I64]                   = LITERAL("i64"),
+    [TOKEN_I8]                    = LITERAL("i8"),
+    [TOKEN_IF]                    = LITERAL("if"),
+    [TOKEN_IN]                    = LITERAL("in"),
+    [TOKEN_LET]                   = LITERAL("let"),
+    [TOKEN_LINUX]                 = LITERAL("linux"),
+    [TOKEN_OPAQUE]                = LITERAL("opaque"),
+    [TOKEN_STATIC]                = LITERAL("static"),
+    [TOKEN_WHILE]                 = LITERAL("while"),
     // leave the rest, and UNPARSEABLE as {0, NULL}
     [TOKEN_INT_BIN ... TOKEN_EOF] = DYNAMIC,
 };
@@ -217,27 +224,11 @@ static const String LITERALS[TOKEN_EOF + 1] = {
 #undef DYNAMIC
 #undef LITERAL
 
-static void skip_line_comment(USE Scanner s) {
-    while (s->head < s->end && *s->head != '\n') advance(s);
-}
-
 static void skip_block_comment(USE Scanner s) {
-    while (s->head < s->end) {
-        switch (advance(s)) {
-            case '\n':
-                s->line_start = ++s->head;
-                s->line++;
-                break;
-            case '*':
-                if (peek(s) == '/') {
-                    s->head += 2;
-                    return;
-                }
-                [[fallthrough]];
-            default:
-                s->head++;
-        }
+    for (int chr = advance(s); chr != -1; chr = advance(s)) {
+        if (chr == '*' && advance_on('/', s)) return;
     }
+    scan_error(s, "End of file in block comment");
 }
 
 // skip past whitespace and commas
@@ -251,49 +242,23 @@ static void skip_whitespace(USE Scanner s) {
                 advance(s);
                 break;
             case '/':
+                advance(s);
                 if (advance_on('/', s)) {
-                    skip_line_comment(s);
+                    for (int peeked = advance(s);
+                         peeked != -1 && peeked != '\n';
+                         peeked = advance(s));
+
                     break;
-                }
-                if (advance_on('*', s)) {
+                } else if (advance_on('*', s)) {
                     skip_block_comment(s);
                     break;
+                } else {
+                    s->head--;
+                    return;
                 }
-                [[fallthrough]];
             default:
                 return;
         }
-    }
-}
-
-static enum token_type signed_op(USE Scanner s) {
-    if (++s->head == s->end) [[clang::unlikely]] { return TOKEN_UNPARSEABLE; }
-
-    switch (*s->head) {
-        case '%':
-            if (advance_on('=', s)) return TOKEN_SIGNED_MOD_ASSIGN;
-            return TOKEN_SIGNED_MOD;
-        case '*':
-            if (advance_on('=', s)) return TOKEN_SIGNED_MUL_ASSIGN;
-            return TOKEN_SIGNED_MUL;
-        case '/':
-            if (advance_on('=', s)) return TOKEN_SIGNED_DIV_ASSIGN;
-            return TOKEN_SIGNED_DIV;
-        case ':':
-            if (advance_on('[', s)) return TOKEN_SIGNED_CAST;
-            return TOKEN_UNPARSEABLE;
-        case '<':
-            if (advance_on('=', s)) return TOKEN_SIGNED_LE;
-            return TOKEN_SIGNED_LT;
-        case '>':
-            if (advance_on('=', s)) return TOKEN_SIGNED_GE;
-            if (advance_on('>', s)) {
-                if (advance_on('=', s)) return TOKEN_SHR_ARITH_ASSIGN;
-                return TOKEN_SHR_ARITH;
-            }
-            return TOKEN_SIGNED_GT;
-        default:
-            return TOKEN_UNPARSEABLE;
     }
 }
 
@@ -395,7 +360,7 @@ static void scan_escape_char(
         case 'x':
             for (int i = 0; i < 2; i++) {
                 if ((chr = advance(s)) == -1 || !is_hex_digit(chr)) {
-                    if (chr == -1) { goto eof; }
+                    if (chr == -1) goto eof;
                     s->start = esc_start;
                     scan_error(
                         s,
@@ -521,7 +486,6 @@ static enum token_type scan_word(USE Scanner s) {
 // SPDX-SnippetEnd
 
 static void scan_string_literal(USE Scanner s) {
-    advance(s);
     while (!advance_on('"', s)) {
         switch (advance(s)) {
             case -1:
@@ -530,7 +494,7 @@ static void scan_string_literal(USE Scanner s) {
                 scan_escape_char("string", '"', s);
                 break;
             case '\n':
-                scan_error(s, "End of line in character literal.");
+                scan_error(s, "End of line in string literal");
             case '\"':
                 UNREACHABLE(
                     "advance_on('\"') would have ended the string at loop start"
@@ -547,9 +511,9 @@ static void scan_char_literal(USE Scanner s) {
             scan_error(s, "End of file in character literal");
         case '\'':
             if (advance_on('\'', s)) {
-                scan_error(s, "''' is not a valid character literal.");
+                scan_error(s, "''' is not a valid character literal");
             }
-            scan_error(s, "Empty character literal.");
+            scan_error(s, "Empty character literal");
         case '\\':
             scan_escape_char("character", '\'', s);
             break;
@@ -559,27 +523,23 @@ static void scan_char_literal(USE Scanner s) {
             break;
     }
     if (!advance_on('\'', s)) {
-        scan_error(s, "Missing end of character literal.");
+        scan_error(s, "Missing end of character literal");
     }
 }
 
-static enum token_type read_size_suf(enum token_type base, USE Scanner s) {
-    uchar *subtoken_start = s->head;
-    if (!advance_on('#', s)) return base;
-    if (advance_on('8', s)) return base + 1;
+static enum token_type scan_size(enum token_type base, USE Scanner s) {
+    if (advance_on('8', s)) return base;
     if (advance_on('1', s)) {
-        if (advance_on('6', s)) return base + 2;
+        if (advance_on('6', s)) return base + 1;
     }
     if (advance_on('3', s)) {
-        if (advance_on('2', s)) return base + 3;
+        if (advance_on('2', s)) return base + 2;
     }
     if (advance_on('6', s)) {
-        if (advance_on('4', s)) return base + 4;
+        if (advance_on('4', s)) return base + 3;
     }
-
-    s->start = subtoken_start;
     while (is_dec_digit(peek(s))) advance(s);
-    scan_error(s, "Invalid size suffix.");
+    scan_error(s, "Invalid size");
 }
 
 static enum token_type scan_bin(USE Scanner s) {
@@ -593,7 +553,8 @@ static enum token_type scan_bin(USE Scanner s) {
         } else if (peek(s) == '_' && is_bin_digit(peek2(s))) {
             s->head += 2;
         } else {
-            return read_size_suf(TOKEN_INT_BIN, s);
+            if (!advance_on('#', s)) return TOKEN_INT_BIN;
+            return scan_size(TOKEN_INT_BIN_8, s);
         }
     }
 }
@@ -609,7 +570,8 @@ static enum token_type scan_oct(USE Scanner s) {
         } else if (peek(s) == '_' && is_oct_digit(peek2(s))) {
             s->head += 2;
         } else {
-            return read_size_suf(TOKEN_INT_OCT, s);
+            if (!advance_on('#', s)) return TOKEN_INT_OCT;
+            return scan_size(TOKEN_INT_OCT_8, s);
         }
     }
 }
@@ -621,7 +583,8 @@ static enum token_type scan_dec(USE Scanner s) {
         } else if (peek(s) == '_' && is_dec_digit(peek2(s))) {
             s->head += 2;
         } else {
-            return read_size_suf(TOKEN_INT_DEC, s);
+            if (!advance_on('#', s)) return TOKEN_INT_DEC;
+            return scan_size(TOKEN_INT_DEC_8, s);
         }
     }
 }
@@ -637,8 +600,48 @@ static enum token_type scan_hex(USE Scanner s) {
         } else if (peek(s) == '_' && is_hex_digit(peek2(s))) {
             s->head += 2;
         } else {
-            return read_size_suf(TOKEN_INT_HEX, s);
+            if (!advance_on('#', s)) return TOKEN_INT_HEX;
+            return scan_size(TOKEN_INT_HEX_8, s);
         }
+    }
+}
+
+static enum token_type finish_cast(enum token_type base, USE Scanner s) {
+    enum token_type type = scan_size(base, s);
+    if (!advance_on(']', s)) scan_error(s, "Missing end of size cast");
+    return type;
+}
+
+static enum token_type signed_op(USE Scanner s) {
+    if (++s->head == s->end) [[clang::unlikely]] return TOKEN_UNPARSEABLE;
+
+    switch (*s->head) {
+        case '%':
+            if (advance_on('=', s)) return TOKEN_SIGNED_MOD_ASSIGN;
+            return TOKEN_SIGNED_MOD;
+        case '*':
+            if (advance_on('=', s)) return TOKEN_SIGNED_MUL_ASSIGN;
+            return TOKEN_SIGNED_MUL;
+        case '/':
+            if (advance_on('=', s)) return TOKEN_SIGNED_DIV_ASSIGN;
+            return TOKEN_SIGNED_DIV;
+        case ':':
+            if (advance_on('[', s)) {
+                return finish_cast(TOKEN_SIGNED_BITCAST_8, s);
+            }
+            return TOKEN_UNPARSEABLE;
+        case '<':
+            if (advance_on('=', s)) return TOKEN_SIGNED_LE;
+            return TOKEN_SIGNED_LT;
+        case '>':
+            if (advance_on('=', s)) return TOKEN_SIGNED_GE;
+            if (advance_on('>', s)) {
+                if (advance_on('=', s)) return TOKEN_SHR_ARITH_ASSIGN;
+                return TOKEN_SHR_ARITH;
+            }
+            return TOKEN_SIGNED_GT;
+        default:
+            return TOKEN_UNPARSEABLE;
     }
 }
 
@@ -694,7 +697,10 @@ static enum token_type next_token_type(USE Scanner s) {
             if (advance_on('=', s)) return TOKEN_DIV_ASSIGN;
             return TOKEN_DIV;
         case ':':
-            if (advance_on('[', s)) return TOKEN_UNSIGNED_CAST;
+            if (advance_on('[', s)) {
+                return finish_cast(TOKEN_UNSIGNED_BITCAST_8, s);
+            }
+            if (advance_on('{', s)) return TOKEN_TYPE_CAST;
             return TOKEN_COLON;
         case ';':
             return TOKEN_SEMICOLON;

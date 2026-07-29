@@ -19,6 +19,8 @@ switch (TOK.type) {
 #warning "define TOKEN, DEFINE_TOKENS or DEBUG_TOKENS before including tokens.h"
 #define TOKEN(T)
 #endif
+#define SIZED_TOKEN(t) \
+    TOKEN(t##_8) TOKEN(t##_16) TOKEN(t##_32) TOKEN(t##_64)
 #define SIZABLE_TOKEN(t) \
     TOKEN(t) TOKEN(t##_8) TOKEN(t##_16) TOKEN(t##_32) TOKEN(t##_64)
 
@@ -105,8 +107,9 @@ TOKEN(COMMA) // ","
 
 // casts
 
-TOKEN(UNSIGNED_CAST) // ":["
-TOKEN(SIGNED_CAST) // "$:["
+SIZED_TOKEN(UNSIGNED_BITCAST) // ":[N]"
+SIZED_TOKEN(SIGNED_BITCAST) // "$:[N]"
+TOKEN(TYPE_CAST) // ":{"
 
 // keyword tokens
 
@@ -140,6 +143,7 @@ TOKEN(IDENT) // identifier
 TOKEN(UNPARSEABLE) // unparseable character/s
 TOKEN(EOF)
 #undef TOKEN
+#undef SIZED_TOKEN
 #undef SIZABLE_TOKEN
 #ifdef DEFINE_TOKENS
 #undef DEFINE_TOKENS
