@@ -57,3 +57,15 @@ executable('uclpc',
   include_directories : incdir,
   install: true,
 )
+
+executable('uclpc.ubsan',
+  'src/main.c',
+  'src/hash.c',
+  'src/colorize.c',
+  'src/scanner.c',
+  mem_handlers,
+  c_args: ['-fsanitize=undefined'],
+  link_args: ['-fsanitize=undefined'],
+  include_directories: incdir,
+  install: false,
+)
