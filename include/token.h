@@ -32,16 +32,6 @@ inline void destroy_token(Token t) {
     if (t.should_free_text) free(t.lexeme.text);
 }
 
-struct token_sequence {
-    size_t len;
-    Token *_Nonnull tokens [[clang::counted_by(len)]];
-};
-
-inline void destroy_token_sequence(struct token_sequence seq) {
-    for (size_t i = 0; i < seq.len; ++i) destroy_token(seq.tokens[i]);
-    free(seq.tokens);
-}
-
 struct token_sequence tokenize(
     size_t len, AllocGroup ag, const char source[_Nonnull len]
 );

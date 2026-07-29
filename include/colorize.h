@@ -11,7 +11,9 @@
 
 #include "typenames.h"
 
-typedef void (*ColorWriter)(const uchar *text, FILE *, int len, const char *color_code);
+typedef void (*ColorWriter)(
+    const uchar *text, FILE *, int len, const char *color_code
+);
 
 enum color_setting {
     COLOR_DEFAULT,

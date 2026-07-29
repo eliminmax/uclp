@@ -77,7 +77,7 @@ struct ucl_array {
 
 // A tagged union representing a type
 typedef struct ucl_type {
-    enum ucl_type_tag: uint8_t {
+    enum ucl_type_tag : uint8_t {
         TYPE_POINTER,
         TYPE_OPAQUE,
         TYPE_I8,

@@ -4,28 +4,18 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 #include <ctype.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <limits.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #include "colorize.h"
-#include "mem/arena.h"
 #include "mem/checked.h"
-#include "mem/dynarray.h"
 #include "safety.h"
 #include "scanner.h"
 #include "token.h"
 
-#define BUF_SIZE 0x4000
 #define MAX_ERR_TOKEN_SIZE 0x1000
 
 #define NODEREF
@@ -36,8 +26,9 @@
 #endif
 #endif
 
+#define USE [[clang::use_handle("scanner")]]
+
 struct scanner {
-    AllocGroup allocs;
     size_t source_size;
     uchar *source [[clang::counted_by(source_size)]];
     uchar *start;
@@ -46,108 +37,78 @@ struct scanner {
     uchar NODEREF *end;
     size_t line;
     jmp_buf jump_buf;
-} scanner;
+};
 
-void start_scanner(const char *path) {
-    int fd = open(path, O_RDONLY);
-    int err;
-    if (fd < 0) goto read_error;
-
-    scanner.allocs = group_create();
-    scanner.line = 1;
-
-    errno = 0;
-    off_t file_size = lseek(fd, 0, SEEK_END);
-    err = errno;
-    REQUIRE(err != EBADF);
-    lseek(fd, 0, SEEK_SET);
-
-    switch (err) {
-        [[clang::likely]] case 0: {
-            ssize_t read_count;
-            size_t remaining = file_size;
-            scanner.source_size = file_size;
-            uchar *_Nonnull source = checked_malloc(file_size);
-            uchar *_Nonnull head = source;
-            while ((read_count = read(fd, head, remaining)) != 0) {
-                if (read_count < 0) [[clang::unlikely]] { goto read_error; }
-                head += read_count;
-                remaining -= read_count;
-            }
-            scanner.source = source;
-            break;
-        }
-        case EBADF:
-            unreachable();
-        case ESPIPE:
-        case EINVAL:
-        case EOVERFLOW: {
-            ssize_t read_count;
-            uchar *read_buf = checked_malloc(BUF_SIZE);
-            CharBuffer buf = (CharBuffer){};
-            while ((read_count = read(fd, read_buf, BUF_SIZE)) != 0) {
-                if (read_count < 0) [[clang::unlikely]] { goto read_error; }
-                append_chars(&buf, read_count, read_buf);
-            }
-            scanner.source_size = buf.size;
-            scanner.source = checked_realloc(buf.mem, buf.size);
-            free(read_buf);
-        }
-        [[clang::unlikely]] default: {
-            fprintf(
-                stderr,
-                "Unexpected error when checking file size of `%s`: %s\n",
-                path,
-                strerror(err)
-            );
-            exit(2);
-        }
-    }
-    scanner.line_start = scanner.start = scanner.head = scanner.source;
-    scanner.end = &scanner.source[scanner.source_size];
-    return;
-
-read_error:
-    err = errno;
-    fprintf(
-        stderr,
-        "Failed to read source code from `%s`: %s\n",
-        path,
-        strerror(err)
-    );
-    exit(2);
+[[clang::acquire_handle("scanner")]]
+Scanner start_scanner(String source) {
+    Scanner s = checked_malloc(sizeof(struct scanner));
+    s->line = 1;
+    s->source_size = source.len;
+    s->line_start = s->start = s->head = s->source = (uchar*)source.text;
+    s->end = &s->source[s->source_size];
+    return s;
 }
 
-void end_scanner() {
-    free(scanner.source);
-    group_free(scanner.allocs);
+[[gnu::cold, gnu::format(__printf__, 2, 3), noreturn]]
+static void scan_error(USE Scanner s, const char *_Nonnull fmt, ...) {
+    REQUIRE(s->start < s->end);
+    REQUIRE(*s->start < 0x80);
+
+    uchar *line_end = s->head;
+    while (line_end < s->end && *line_end != '\n') line_end++;
+
+    ptrdiff_t prefix_len = s->start - s->line_start;
+    ptrdiff_t token_len = s->head - s->start;
+    ptrdiff_t suffix_len = line_end - s->head;
+
+    va_list fmt_args;
+    va_start(fmt_args, fmt);
+    vfprintf(stderr, fmt, fmt_args);
+    va_end(fmt_args);
+
+    if (token_len > MAX_ERR_TOKEN_SIZE || prefix_len > MAX_ERR_TOKEN_SIZE ||
+        suffix_len > MAX_ERR_TOKEN_SIZE) {
+        fprintf(stderr, "  (line %zu)", s->line);
+        longjmp(s->jump_buf, 1);
+    }
+
+    fprintf(stderr, "(line %zu):\n", s->line);
+    // dim italics
+    write_color(s->line_start, stderr, prefix_len, "2;3");
+    // bold red
+    write_color(s->start, stderr, token_len, "1;31");
+    write_color(s->head, stderr, suffix_len, "2; 3");
+    longjmp(s->jump_buf, 1);
 }
 
-static int peek() {
-    if (scanner.head + 1 < scanner.end) [[clang::likely]] {
-        return scanner.head[1];
-    }
+static int peek(USE Scanner s) {
+    if (s->head + 1 < s->end) [[clang::likely]] { return s->head[1]; }
     return -1;
 }
 
-static bool advance_on(char chr) {
-    if (peek() == chr) {
-        scanner.head++;
-        return true;
-    }
-    return false;
+static int peek2(USE Scanner s) {
+    if (s->head + 2 < s->end) [[clang::likely]] { return s->head[2]; }
+    return -1;
 }
 
-static int advance() {
-    if (scanner.head < scanner.end) {
-        uchar c = *++scanner.head;
+static int advance(USE Scanner s) {
+    if (s->head < s->end) {
+        uchar c = *++s->head;
         if (c == '\n') {
-            scanner.line++;
-            scanner.line_start = scanner.head + 1;
+            s->line++;
+            s->line_start = s->head + 1;
         }
         return c;
     }
     return -1;
+}
+
+static bool advance_on(char chr, USE Scanner s) {
+    if (peek(s) == chr) {
+        advance(s);
+        return true;
+    }
+    return false;
 }
 
 #define LITERAL(lit) ((String){.len = sizeof(lit) - 1, .text = lit})
@@ -161,7 +122,7 @@ static int advance() {
 // Definitions are orderered by common prefixes, with shorter strings after
 // longer ones, to make it easier to follow when implementing the token matching
 // logic.
-static String TOKEN_STRINGS[TOKEN_EOF + 1] = {
+static const String TOKEN_STRINGS[TOKEN_EOF + 1] = {
     [TOKEN_NE]                = LITERAL("!="),
     [TOKEN_STR]               = DYNAMIC,
     [TOKEN_LOGICAL_NOT]       = LITERAL("!"),
@@ -238,63 +199,53 @@ static String TOKEN_STRINGS[TOKEN_EOF + 1] = {
     [TOKEN_OPAQUE]            = LITERAL("opaque"),
     [TOKEN_STATIC]            = LITERAL("static"),
     [TOKEN_WHILE]             = LITERAL("while"),
-    // leave STR, CHAR, INT_*, IDENT, and UNPARSEABLE as {0, NULL}
-    [TOKEN_INT_BIN]           = DYNAMIC,
-    [TOKEN_INT_OCT]           = DYNAMIC,
-    [TOKEN_INT_DEC]           = DYNAMIC,
-    [TOKEN_INT_HEX]           = DYNAMIC,
-    [TOKEN_UNPARSEABLE]       = DYNAMIC,
-    [TOKEN_EOF]               = LITERAL(""),
+    // leave the rest, and UNPARSEABLE as {0, NULL}
+    [TOKEN_INT_BIN ... TOKEN_EOF] = DYNAMIC,
 };
 // clang-format on
 #undef DYNAMIC
 #undef LITERAL
 
-static void skip_line_comment() {
-    while (scanner.head < scanner.end && *scanner.head != '\n') { advance(); }
+static void skip_line_comment(USE Scanner s) {
+    while (s->head < s->end && *s->head != '\n') { advance(s); }
 }
 
-static void skip_block_comment() {
-    while (scanner.head < scanner.end) {
-        switch (*scanner.head) {
+static void skip_block_comment(USE Scanner s) {
+    while (s->head < s->end) {
+        switch (*s->head) {
             case '\n':
-                scanner.line_start = ++scanner.head;
-                scanner.line++;
+                s->line_start = ++s->head;
+                s->line++;
                 break;
             case '*':
-                if (peek() == '/') {
-                    scanner.head += 2;
+                if (peek(s) == '/') {
+                    s->head += 2;
                     return;
                 }
                 [[fallthrough]];
             default:
-                scanner.head++;
+                s->head++;
         }
     }
 }
 
 // skip past whitespace and commas
-static void skip_whitespace() {
-    while (scanner.head < scanner.end) {
-        switch (*scanner.head) {
+static void skip_whitespace(USE Scanner s) {
+    while (s->head < s->end) {
+        switch (peek(s)) {
             case '\n':
-                scanner.line_start = ++scanner.head;
-                scanner.line++;
-                break;
             case '\r':
             case ' ':
-            case '\f': // form feed character
-            case '\v': // vertical tab
             case '\t':
-                scanner.head++;
+                advance(s);
                 break;
             case '/':
-                if (advance_on('/')) {
-                    skip_line_comment();
+                if (advance_on('/', s)) {
+                    skip_line_comment(s);
                     break;
                 }
-                if (advance_on('*')) {
-                    skip_block_comment();
+                if (advance_on('*', s)) {
+                    skip_block_comment(s);
                     break;
                 }
                 [[fallthrough]];
@@ -304,31 +255,29 @@ static void skip_whitespace() {
     }
 }
 
-static enum token_type signed_op() {
-    if (++scanner.head == scanner.end) [[clang::unlikely]] {
-        return TOKEN_UNPARSEABLE;
-    }
+static enum token_type signed_op(USE Scanner s) {
+    if (++s->head == s->end) [[clang::unlikely]] { return TOKEN_UNPARSEABLE; }
 
-    switch (*scanner.head) {
+    switch (*s->head) {
         case '%':
-            if (advance_on('=')) return TOKEN_SIGNED_MOD_ASSIGN;
+            if (advance_on('=', s)) return TOKEN_SIGNED_MOD_ASSIGN;
             return TOKEN_SIGNED_MOD;
         case '*':
-            if (advance_on('=')) return TOKEN_SIGNED_MUL_ASSIGN;
+            if (advance_on('=', s)) return TOKEN_SIGNED_MUL_ASSIGN;
             return TOKEN_SIGNED_MUL;
         case '/':
-            if (advance_on('=')) return TOKEN_SIGNED_DIV_ASSIGN;
+            if (advance_on('=', s)) return TOKEN_SIGNED_DIV_ASSIGN;
             return TOKEN_SIGNED_DIV;
         case ':':
-            if (advance_on('[')) return TOKEN_SIGNED_CAST;
+            if (advance_on('[', s)) return TOKEN_SIGNED_CAST;
             return TOKEN_UNPARSEABLE;
         case '<':
-            if (advance_on('=')) return TOKEN_SIGNED_LE;
+            if (advance_on('=', s)) return TOKEN_SIGNED_LE;
             return TOKEN_SIGNED_LT;
         case '>':
-            if (advance_on('=')) return TOKEN_SIGNED_GE;
-            if (advance_on('>')) {
-                if (advance_on('=')) return TOKEN_SHR_ARITH_ASSIGN;
+            if (advance_on('=', s)) return TOKEN_SIGNED_GE;
+            if (advance_on('>', s)) {
+                if (advance_on('=', s)) return TOKEN_SHR_ARITH_ASSIGN;
                 return TOKEN_SHR_ARITH;
             }
             return TOKEN_SIGNED_GT;
@@ -337,65 +286,42 @@ static enum token_type signed_op() {
     }
 }
 
-static String get_lexeme() {
-    ptrdiff_t len = scanner.head - scanner.start;
+static String get_lexeme(USE Scanner s) {
+    ptrdiff_t len = s->head - s->start;
     char *text = NULL;
     if (len) {
         void *_Nonnull mem = checked_malloc(len);
-        text = memcpy(mem, scanner.start, len);
+        text = memcpy(mem, s->start, len);
     }
     return (String){.len = len, .text = text};
 }
 
-// Don't use locale-sensitive <ctypes.h> functions for checks that are part of
-// the language's syntax, but for
+// Don't use locale-sensitive <ctype.h> functions for checks that should not be
+// locale-dependent
+
+static bool is_in_range(int c, int start, int end) {
+    return c >= start && c <= end;
+}
+
+#define is_bin_digit(c) is_in_range((c), '0', '1')
+#define is_oct_digit(c) is_in_range((c), '0', '7')
+#define is_dec_digit(c) is_in_range((c), '0', '9')
+
 [[gnu::const]]
-static bool is_hex_digit(uchar c) {
+static bool is_hex_digit(int c) {
     return (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') ||
            (c >= '0' && c <= '9');
 }
 
 [[gnu::const]]
-static bool is_ident_start(uchar c) {
+static bool is_ident_start(int c) {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_');
 }
 
 [[gnu::const]]
-static bool is_ident_chr(uchar c) {
+static bool is_ident_chr(int c) {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
            (c >= '0' && c <= '9') || (c == '_');
-}
-
-[[gnu::cold, gnu::format(__printf__, 1, 2), noreturn]]
-static void scan_error(const char *_Nonnull fmt, ...) {
-    REQUIRE(scanner.start < scanner.end);
-    REQUIRE(*scanner.start < 0x80);
-
-    uchar *line_end = scanner.head;
-    while (line_end < scanner.end && *line_end != '\n') line_end++;
-
-    ptrdiff_t prefix_len = scanner.start - scanner.line_start;
-    ptrdiff_t token_len = scanner.head - scanner.start;
-    ptrdiff_t suffix_len = line_end - scanner.head;
-
-    va_list fmt_args;
-    va_start(fmt_args, fmt);
-    vfprintf(stderr, fmt, fmt_args);
-    va_end(fmt_args);
-
-    if (token_len > MAX_ERR_TOKEN_SIZE || prefix_len > MAX_ERR_TOKEN_SIZE ||
-        suffix_len > MAX_ERR_TOKEN_SIZE) {
-        fprintf(stderr, "  (line %zu)", scanner.line);
-        longjmp(scanner.jump_buf, 1);
-    }
-
-    fprintf(stderr, "(line %zu):\n", scanner.line);
-    // dim italics
-    write_color(scanner.line_start, stderr, prefix_len, "2;3");
-    // bold red
-    write_color(scanner.start, stderr, token_len, "1;31");
-    write_color(scanner.head, stderr, suffix_len, "2; 3");
-    longjmp(scanner.jump_buf, 1);
 }
 
 typedef struct {
@@ -436,15 +362,15 @@ static EscapedChr esc_chr(uchar c) {
     return buf;
 }
 
-static void scan_escape_char(const char *literal_type) {
+static void scan_escape_char(const char *literal_type, USE Scanner s) {
     int chr;
     int next;
-    uchar *esc_start = scanner.head;
-    switch (chr = advance()) {
+    uchar *esc_start = s->head;
+    switch (chr = advance(s)) {
         case -1:
             goto eof;
         case '\n':
-            scan_error("End of file in %s literal", literal_type);
+            scan_error(s, "End of file in %s literal", literal_type);
         case '\'':
         case '\"':
         case '\\':
@@ -454,10 +380,11 @@ static void scan_escape_char(const char *literal_type) {
             return;
         case 'x':
             for (int i = 0; i < 2; i++) {
-                if ((chr = advance()) == -1 || !is_hex_digit(chr)) {
+                if ((chr = advance(s)) == -1 || !is_hex_digit(chr)) {
                     if (chr == -1) { goto eof; }
-                    scanner.start = esc_start;
+                    s->start = esc_start;
                     scan_error(
+                        s,
                         "Expected hexadecimal digit in \\x escape, but got "
                         "'%s'",
                         esc_chr(chr).text
@@ -473,191 +400,362 @@ static void scan_escape_char(const char *literal_type) {
             // octal escape.
             //
             // If EOF, then
-            if ((next = peek()) == -1) goto eof;
+            if ((next = peek(s)) == -1) goto eof;
 
             if (next < '0' || next > '7') return;
             // advance and fall through to handle possible last digit
-            advance();
+            advance(s);
             [[fallthrough]];
         case '4':
         case '5':
         case '6':
         case '7':
             // advance if the next digit is valid octal
-            next = peek();
-            if (next >= '0' && next <= '7') advance();
+            next = peek(s);
+            if (next >= '0' && next <= '7') advance(s);
             return;
         default:
-            scanner.start = esc_start;
-            scan_error("Invalid escape sequence: '\\%s'", esc_chr(chr).text);
+            s->start = esc_start;
+            scan_error(s, "Invalid escape sequence: '\\%s'", esc_chr(chr).text);
     }
 eof:
-    scan_error("End of file in %s literal", literal_type);
+    scan_error(s, "End of file in %s literal", literal_type);
 }
 
-static enum token_type scan_string_literal() {
-    advance();
+// SPDX-SnippetCopyrightText: 2026 Eli Array Minkoff
+// SPDX-SnippetCopyrightText: 2015 Robert Nystrom
+//
+// SPDX-License-Identifier: MIT
 
-    while (!advance_on('"')) {
-        if (scanner.head == scanner.end) { break; }
+// A port of `checkKeyword` from clox (in Nystrom's Crafting Interpreters)
+static enum token_type check_keyword(
+    int start, int len, const char *rest, enum token_type type, USE Scanner s
+) {
+    if (s->head - s->start == start + len &&
+        memcmp(s->start + start, rest, len) == 0) {
+        return type;
     }
 
-    __builtin_trap();
+    return TOKEN_IDENT;
 }
 
-static enum token_type scan_char_literal() {
-    int chr;
-    switch ((chr = advance())) {
-        case -1:
-            scan_error("End of file in character literal");
-        case '\'':
-            if (advance_on('\'')) {
-                scan_error("''' is not a valid character literal.");
+// includes a port of `identifierType` from Nystrom's Crafting Interpreters
+static enum token_type scan_word(USE Scanner s) {
+    ptrdiff_t sz;
+    advance(s);
+    while (is_ident_chr(peek(s))) advance(s);
+    switch (*s->start) {
+        case 'd':
+            return check_keyword(1, 6, "ynamic", TOKEN_DYNAMIC, s);
+        case 'e':
+            if (s->head - s->start == 4 && s->start[1] == 'l') {
+                if (s->start[2] == 'i' && s->start[3] == 'f') {
+                    return TOKEN_ELIF;
+                } else if (s->start[2] == 's' && s->start[3] == 'e') {
+                    return TOKEN_ELSE;
+                }
             }
-            scan_error("Empty character literal.");
+            break;
+        case 'f':
+            if (s->head - s->start > 1) {
+                switch (s->start[1]) {
+                    case 'o':
+                        return check_keyword(1, 6, "oreach", TOKEN_FOREACH, s);
+                    case 'u':
+                        return check_keyword(1, 3, "unc", TOKEN_FUNC, s);
+                }
+            }
+            break;
+        case 'i':
+            if ((sz = s->head - s->start) > 1) {
+                switch (s->start[1]) {
+                    case '1':
+                        return check_keyword(2, 1, "6", TOKEN_I16, s);
+                    case '3':
+                        return check_keyword(2, 1, "2", TOKEN_I32, s);
+                    case '6':
+                        return check_keyword(2, 1, "4", TOKEN_I64, s);
+                    case '8':
+                        return sz == 2 ? TOKEN_I8 : TOKEN_IDENT;
+                    case 'f':
+                        return sz == 2 ? TOKEN_IF : TOKEN_IDENT;
+                    case 'n':
+                        return sz == 2 ? TOKEN_IN : TOKEN_IDENT;
+                }
+            }
+            break;
+        case 'l':
+            if (s->head - s->start > 1) {
+                switch (s->start[1]) {
+                    case 'e':
+                        return check_keyword(2, 1, "t", TOKEN_LET, s);
+                    case 'i':
+                        return check_keyword(2, 3, "nux", TOKEN_LINUX, s);
+                }
+            }
+            break;
+        case 'o':
+            return check_keyword(1, 5, "paque", TOKEN_OPAQUE, s);
+        case 's':
+            return check_keyword(1, 5, "tatic", TOKEN_STATIC, s);
+        case 'w':
+            return check_keyword(1, 4, "hile", TOKEN_WHILE, s);
+    }
+    return TOKEN_IDENT;
+}
+
+// SPDX-SnippetEnd
+
+static void scan_string_literal(USE Scanner s) {
+    advance(s);
+    while (!advance_on('"', s)) {
+        switch (advance(s)) {
+            case -1:
+                scan_error(s, "End of file in string literal");
+            case '\\':
+                scan_escape_char("string", s);
+                break;
+            case '\n':
+                scan_error(s, "End of line in character literal.");
+            case '\"':
+                UNREACHABLE(
+                    "advance_on('\"') would have ended the string at loop start"
+                );
+            default:
+                break;
+        }
+    }
+}
+
+static void scan_char_literal(USE Scanner s) {
+    switch (advance(s)) {
+        case -1:
+            scan_error(s, "End of file in character literal");
+        case '\'':
+            if (advance_on('\'', s)) {
+                scan_error(s, "''' is not a valid character literal.");
+            }
+            scan_error(s, "Empty character literal.");
         case '\\':
-            scan_escape_char("character");
+            scan_escape_char("character", s);
             break;
         case '\n':
-            scan_error("End of line in character literal");
+            scan_error(s, "End of line in character literal");
         default:
             break;
     }
-    if (!advance_on('\'')) { scan_error("Missing end of character literal."); }
-    return TOKEN_CHAR;
+    if (!advance_on('\'', s)) {
+        scan_error(s, "Missing end of character literal.");
+    }
 }
 
-static void scan_numeric_literal() {
-    __builtin_trap();
+static enum token_type read_size_suf(enum token_type base, USE Scanner s) {
+    uchar *subtoken_start = s->head;
+    if (!advance_on('#', s)) return base;
+    if (advance_on('8', s)) return base + 1;
+    if (advance_on('1', s)) {
+        if (advance_on('6', s)) return base + 2;
+    }
+    if (advance_on('3', s)) {
+        if (advance_on('2', s)) return base + 3;
+    }
+    if (advance_on('6', s)) {
+        if (advance_on('4', s)) return base + 4;
+    }
+
+    s->start = subtoken_start;
+    while (is_dec_digit(peek(s))) advance(s);
+    scan_error(s, "Invalid size suffix.");
 }
 
-static enum token_type next_token_type() {
-    skip_whitespace();
+static enum token_type scan_bin(USE Scanner s) {
+    advance(s);
+    advance(s);
+    while (is_bin_digit(peek(s))) {
+        advance(s);
+        if (is_bin_digit(peek2(s))) advance_on('_', s);
+    }
+    return read_size_suf(TOKEN_INT_BIN, s);
+}
 
-    if (scanner.head == scanner.end) return TOKEN_EOF;
+static enum token_type scan_oct(USE Scanner s) {
+    advance(s);
+    advance(s);
+    while (is_oct_digit(peek(s))) {
+        advance(s);
+        if (is_oct_digit(peek2(s))) advance_on('_', s);
+    }
+    return read_size_suf(TOKEN_INT_OCT, s);
+}
 
-    scanner.start = scanner.head;
+static enum token_type scan_dec(USE Scanner s) {
+    while (is_dec_digit(peek(s))) {
+        advance(s);
+        if (is_dec_digit(peek2(s))) advance_on('_', s);
+    }
+    return read_size_suf(TOKEN_INT_DEC, s);
+}
 
-    switch (*scanner.head) {
+static enum token_type scan_hex(USE Scanner s) {
+    advance(s);
+    advance(s);
+    while (is_hex_digit(peek(s))) {
+        advance(s);
+        if (is_hex_digit(peek2(s))) advance_on('_', s);
+    }
+    return read_size_suf(TOKEN_INT_HEX, s);
+}
+
+static enum token_type next_token_type(USE Scanner s) {
+    skip_whitespace(s);
+
+    if (s->head == s->end) return TOKEN_EOF;
+
+    s->start = s->head;
+
+    switch (*s->head) {
         case '!':
-            if (advance_on('=')) return TOKEN_NE;
+            if (advance_on('=', s)) return TOKEN_NE;
             return TOKEN_LOGICAL_NOT;
         case '"':
-            return scan_string_literal();
+            scan_string_literal(s);
+            return TOKEN_CHAR;
         case '#':
             return TOKEN_POUND_SIGN;
         case '$':
-            return signed_op();
+            return signed_op(s);
         case '%':
-            if (advance_on('=')) return TOKEN_MOD_ASSIGN;
+            if (advance_on('=', s)) return TOKEN_MOD_ASSIGN;
             return TOKEN_MOD;
         case '&':
-            if (advance_on('&')) return TOKEN_LOGICAL_AND;
-            if (advance_on('=')) return TOKEN_BIT_AND_ASSIGN;
+            if (advance_on('&', s)) return TOKEN_LOGICAL_AND;
+            if (advance_on('=', s)) return TOKEN_BIT_AND_ASSIGN;
             return TOKEN_BIT_AND;
         case '\'':
-            return scan_char_literal();
+            scan_char_literal(s);
+            return TOKEN_STR;
         case '(':
             return TOKEN_L_PAREN;
         case ')':
             return TOKEN_R_PAREN;
         case '*':
-            if (advance_on('=')) return TOKEN_MUL_ASSIGN;
+            if (advance_on('=', s)) return TOKEN_MUL_ASSIGN;
             return TOKEN_MUL;
         case '+':
-            if (advance_on('=')) return TOKEN_PLUS_ASSIGN;
+            if (advance_on('=', s)) return TOKEN_PLUS_ASSIGN;
             return TOKEN_PLUS;
         case ',':
             return TOKEN_COMMA;
         case '-':
-            if (advance_on('=')) return TOKEN_MINUS_ASSIGN;
-            if (advance_on('>')) return TOKEN_ARROW;
+            if (advance_on('=', s)) return TOKEN_MINUS_ASSIGN;
+            if (advance_on('>', s)) return TOKEN_ARROW;
             return TOKEN_MINUS;
         case '.':
-            if (advance_on('&')) return TOKEN_REF;
-            if (advance_on('*')) return TOKEN_DEREF;
+            if (advance_on('&', s)) return TOKEN_REF;
+            if (advance_on('*', s)) return TOKEN_DEREF;
             return TOKEN_UNPARSEABLE;
         case '/':
-            if (advance_on('=')) return TOKEN_DIV_ASSIGN;
+            if (advance_on('=', s)) return TOKEN_DIV_ASSIGN;
             return TOKEN_DIV;
         case ':':
-            if (advance_on('[')) return TOKEN_UNSIGNED_CAST;
+            if (advance_on('[', s)) return TOKEN_UNSIGNED_CAST;
             return TOKEN_COLON;
         case ';':
             return TOKEN_SEMICOLON;
         case '<':
-            if (advance_on('<')) {
-                if (advance_on('=')) return TOKEN_SHL_ASSIGN;
+            if (advance_on('<', s)) {
+                if (advance_on('=', s)) return TOKEN_SHL_ASSIGN;
                 return TOKEN_SHL;
             }
-            if (advance_on('=')) return TOKEN_LE;
+            if (advance_on('=', s)) return TOKEN_LE;
             return TOKEN_LT;
         case '=':
-            if (advance_on('=')) return TOKEN_EQ;
+            if (advance_on('=', s)) return TOKEN_EQ;
             return TOKEN_ASSIGN;
         case '>':
-            if (advance_on('>')) {
-                if (advance_on('=')) return TOKEN_SHR_LOG_ASSIGN;
+            if (advance_on('>', s)) {
+                if (advance_on('=', s)) return TOKEN_SHR_LOG_ASSIGN;
                 return TOKEN_SHR_LOG;
             }
-            if (advance_on('=')) return TOKEN_GE;
+            if (advance_on('=', s)) return TOKEN_GE;
             return TOKEN_GT;
         case '[':
             return TOKEN_L_SQUARE;
         case ']':
             return TOKEN_R_SQUARE;
         case '^':
-            if (advance_on('=')) return TOKEN_BIT_XOR_ASSIGN;
+            if (advance_on('=', s)) return TOKEN_BIT_XOR_ASSIGN;
             return TOKEN_BIT_XOR;
         case '{':
             return TOKEN_L_CURLY;
         case '|':
-            if (advance_on('=')) return TOKEN_BIT_OR_ASSIGN;
-            if (advance_on('|')) return TOKEN_LOGICAL_OR;
+            if (advance_on('=', s)) return TOKEN_BIT_OR_ASSIGN;
+            if (advance_on('|', s)) return TOKEN_LOGICAL_OR;
             return TOKEN_BIT_OR;
         case '}':
             return TOKEN_R_CURLY;
+        case '0':
+            switch (peek(s)) {
+                case 'b':
+                    return scan_bin(s);
+                case 'o':
+                    return scan_oct(s);
+                case 'x':
+                    return scan_hex(s);
+                default:
+                    return scan_dec(s);
+            }
+        default:
+            if (is_ident_start(*s->head)) {
+                return scan_word(s);
+            } else if (*s->head >= '0' && *s->head <= '9') {
+                return scan_dec(s);
+            }
+            scan_error(s, "Unexpected character '%s'", esc_chr(*s->head).text);
     }
-
-    __builtin_trap();
 }
 
-Token next_token() {
-    if (setjmp(scanner.jump_buf)) {
-        advance();
+Token next_token(USE Scanner s) {
+    if (setjmp(s->jump_buf)) {
+        advance(s);
         return (Token){
             .type = TOKEN_UNPARSEABLE,
-            .line = scanner.line,
-            .lexeme = get_lexeme(),
+            .line = s->line,
+            .lexeme = get_lexeme(s),
             .should_free_text = true,
         };
     }
 
-    enum token_type type = next_token_type();
+    enum token_type type = next_token_type(s);
 
-    size_t len = scanner.head - scanner.start;
+    size_t len = s->head - s->start;
 
-    String lexeme;
+    String lexeme = TOKEN_STRINGS[type];
     bool should_free_text = false;
 
-    if ((lexeme = TOKEN_STRINGS[type]).text) {
+    if (type != TOKEN_EOF && lexeme.text != NULL) {
+        fprintf(stderr, "       len: %zu\nlexeme.len: %zu\n", lexeme.len, len);
         assert(len == lexeme.len);
-        assert(memcmp(lexeme.text, scanner.head, len) == 0);
+        assert(memcmp(lexeme.text, s->head, len) == 0);
     } else {
         if (len) {
             should_free_text = true;
-            lexeme = get_lexeme();
+            lexeme = get_lexeme(s);
         } else {
             lexeme = (String){0, NULL};
         }
     }
 
-    advance();
+    advance(s);
 
     return (Token){
         .type = type,
-        .line = scanner.line,
+        .line = s->line,
         .lexeme = lexeme,
         .should_free_text = should_free_text,
     };
+}
+
+void free_scanner([[clang::release_handle("scanner")]] Scanner s) {
+    free(s);
 }

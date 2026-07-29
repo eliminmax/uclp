@@ -8,29 +8,14 @@ project('uclp', 'c',
 
 if meson.get_compiler('c').get_id() == 'clang'
   add_project_arguments('-Wno-nullability-extension', language: 'c')
+  add_project_arguments('-Wno-gnu-designator', language: 'c')
 else
   add_project_arguments('-D_Nonnull', '-D_Nullable', language: 'c')
 endif
 
 incdir = include_directories('include')
 
-# need flex specifically to generate a reentrant parser
-lex = find_program('flex')
-lex_yy_c = custom_target('lex.yy.c',
-  output : 'lex.yy.c',
-  input : 'src/scan.lex',
-  command : [lex, '-o@OUTPUT@', '@INPUT@', ],
-)
-
 mem_handlers = ['src/mem/arena.c', 'src/mem/checked.c', 'src/mem/dynarray.c']
-
-executable('uclp_scanner',
-  lex_yy_c,
-  mem_handlers,
-  include_directories : incdir,
-  c_args : ['-DSCANNER_STANDALONE'],
-  install : false,
-)
 
 executable('ucf_loader',
   'resources/ucf_loader.c',
@@ -64,9 +49,10 @@ custom_target('binfmt:ucf.conf',
 )
 
 executable('uclpc',
-  lex_yy_c,
-  'src/hash.c',
   'src/main.c',
+  'src/hash.c',
+  'src/colorize.c',
+  'src/scanner.c',
   mem_handlers,
   include_directories : incdir,
   install: true,

@@ -33,6 +33,7 @@ struct array {
     UCLType type;
     size_t size;
 };
+
 typedef enum : uint8_t { STORE_STACK, STORE_STATIC } Placement;
 
 struct conditional {
@@ -175,6 +176,7 @@ struct expression {
 
     UCLType *_Nonnull type;
 };
+
 struct function_call {
     String name;
     uint8_t nargs;

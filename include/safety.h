@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Eli Array Minkoff
+ *
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
 #ifndef UCLP_SAFETY_H
 #define UCLP_SAFETY_H
 
@@ -28,10 +34,11 @@
     do { \
         if (!(cond)) { \
             fputs("INTERNAL COMPILER ERROR!\n", stderr); \
-            fprintf( stderr, \
-                "The internal invariant `" #cond "` did not hold (" \
-                __FILE__\
-                ":%d).\n", __LINE__ \
+            fprintf( \
+                stderr, \
+                "The internal invariant `" #cond "` did not hold (" __FILE__ \
+                ":%d).\n", \
+                __LINE__ \
             ); \
             abort(); \
         } \
@@ -42,7 +49,7 @@
         fputs("\"Unreachable\" code reached in compiler!\n", stderr); \
         fprintf(stderr, "Reason it was thought unreachable: %s\n", comment); \
         abort(); \
-    } while(false)
+    } while (false)
 
 #endif // NDEBUG
 #endif // UCLP_SAFETY_H

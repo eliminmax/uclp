@@ -9,7 +9,9 @@
 #elifdef DEBUG_TOKENS
 #define TOKEN(T) \
     case TOKEN_##T: \
-        printf("<" #T ", line %zu, lexeme `%s`>\n", TOK.line, lexeme); \
+        printf("<" #T ", line %zu, lexeme `", TOK.line); \
+        fwrite(TOK.lexeme.text, 1, TOK.lexeme.len, stdout); \
+        puts("`>"); \
         break;
 
 switch (TOK.type) {
@@ -17,6 +19,8 @@ switch (TOK.type) {
 #warning "define TOKEN, DEFINE_TOKENS or DEBUG_TOKENS before including tokens.h"
 #define TOKEN(T)
 #endif
+#define SIZABLE_TOKEN(t) \
+    TOKEN(t) TOKEN(t##_8) TOKEN(t##_16) TOKEN(t##_32) TOKEN(t##_64)
 
 // bracket-like tokens
 
@@ -45,7 +49,6 @@ TOKEN(MOD_ASSIGN) // "%="
 TOKEN(SIGNED_MUL_ASSIGN) // "$*="
 TOKEN(SIGNED_DIV_ASSIGN) // "$/="
 TOKEN(SIGNED_MOD_ASSIGN) // "$%="
-
 
 // comparison tokens
 
@@ -91,7 +94,6 @@ TOKEN(SHR_LOG_ASSIGN) // ">>="
 TOKEN(SHR_ARITH_ASSIGN) // "$>>="
 TOKEN(SHL_ASSIGN) // "<<="
 
-
 // misc. tokens
 
 TOKEN(POUND_SIGN) // "#"
@@ -128,16 +130,17 @@ TOKEN(I64) // "i64"
 // literal tokens
 TOKEN(STR)
 TOKEN(CHAR)
-TOKEN(INT_DEC)
-TOKEN(INT_BIN)
-TOKEN(INT_OCT)
-TOKEN(INT_HEX)
+SIZABLE_TOKEN(INT_DEC)
+SIZABLE_TOKEN(INT_BIN)
+SIZABLE_TOKEN(INT_OCT)
+SIZABLE_TOKEN(INT_HEX)
 
-TOKEN(IDENT)  // identifier
+TOKEN(IDENT) // identifier
 
 TOKEN(UNPARSEABLE) // unparseable character/s
 TOKEN(EOF)
 #undef TOKEN
+#undef SIZABLE_TOKEN
 #ifdef DEFINE_TOKENS
 #undef DEFINE_TOKENS
 #elifdef DEBUG_TOKENS

@@ -11,7 +11,7 @@
 #define __has_builtin(x) 0
 #endif /* __has_builtin */
 
-#if ! __has_builtin(__builtin_unreachable) 
+#if !__has_builtin(__builtin_unreachable)
 #ifdef SKIP_UNREACHABLE_CHECKS
 #warning "__builtin_unreachable not available - can't skip UNREACHABLE"
 #undef SKIP_UNREACHABLE_CHECKS

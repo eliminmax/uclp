@@ -5,12 +5,13 @@
  *
  */
 
+#include "mem/arena.h"
+
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "mem/arena.h"
 #include "mem/checked.h"
 static constexpr size_t ALLOC_SEGMENT_SIZE = sizeof(intmax_t[0x1000]);
 // the maximum size to keep within a segment

@@ -3,12 +3,11 @@
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
-#include <stdarg.h>
+#include "colorize.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
-#include "colorize.h"
 
 static void write_color_real(
     const uchar *text, FILE *out, int len, const char *code
@@ -32,7 +31,7 @@ static void write_color_if_tty(
     }
 }
 
-static void write_color_resolve(const char *, FILE *, int, const char *);
+static void write_color_resolve(const uchar *, FILE *, int, const char *);
 
 ColorWriter write_color = write_color_resolve;
 enum color_setting COLOR_SETTING = COLOR_DEFAULT;

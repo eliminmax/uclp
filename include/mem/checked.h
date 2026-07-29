@@ -6,8 +6,8 @@
 
 #ifndef UCLP_MEM_CHECKED_H
 #define UCLP_MEM_CHECKED_H
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 // A wrapper around `calloc(3)` that calls `perror` and `abort` if the
 // underlying call to `calloc` returns `NULL`.

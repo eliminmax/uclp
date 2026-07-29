@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: 0BSD
  */
 
+#include "mem/dynarray.h"
+
 #include <stddef.h>
 #include <string.h>
 
 #include "mem/checked.h"
-#include "mem/dynarray.h"
 #include "typenames.h"
 
 extern inline size_t new_capacity(size_t old_cap);

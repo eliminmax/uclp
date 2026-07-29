@@ -3,14 +3,15 @@
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
+#include "hash.h"
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "hash.h"
-#include "safety.h"
 #include "mem/checked.h"
+#include "safety.h"
 #include "sized_string.h"
 
 #define STRING_DUP(s) \
@@ -150,8 +151,8 @@ void *_Nullable ht_set(
             ht_extend_cap(table);
             index = hash_index(hash_string(id), table->capacity);
             while (table->entries[index].status == HT_ENTRY_OCCUPIED) {
-                // already know that it's not already in the table, so no need to
-                // check.
+                // already know that it's not already in the table, so no need
+                // to check.
                 index++;
                 index %= table->capacity;
             }
@@ -160,9 +161,8 @@ void *_Nullable ht_set(
         entry = &table->entries[index];
     }
 
-
-    table->entries[index].status = HT_ENTRY_OCCUPIED;
-    table->entries[index].data = data;
-    table->entries[index].id = STRING_DUP(id);
+    entry->status = HT_ENTRY_OCCUPIED;
+    entry->data = data;
+    entry->id = STRING_DUP(id);
     return NULL;
 }
