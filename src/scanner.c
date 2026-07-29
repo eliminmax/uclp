@@ -72,31 +72,32 @@ static void scan_error(USE Scanner s, const char *_Nonnull fmt, ...) {
         longjmp(s->jump_buf, 1);
     }
 
-    fprintf(stderr, "(line %zu):\n", s->line);
+    fprintf(stderr, "  (line %zu):\n", s->line);
     // dim italics
     write_color(s->line_start, stderr, prefix_len, "2;3");
     // bold red
     write_color(s->start, stderr, token_len, "1;31");
-    write_color(s->head, stderr, suffix_len, "2; 3");
+    write_color(s->head, stderr, suffix_len, "2;3");
+    fputc('\n', stderr);
     longjmp(s->jump_buf, 1);
 }
 
 static int peek(USE Scanner s) {
-    if (s->head + 1 < s->end) [[clang::likely]] { return s->head[1]; }
+    if (s->head + 1 < s->end) [[clang::likely]] return s->head[0];
     return -1;
 }
 
 static int peek2(USE Scanner s) {
-    if (s->head + 2 < s->end) [[clang::likely]] { return s->head[2]; }
+    if (s->head + 2 < s->end) [[clang::likely]] return s->head[1];
     return -1;
 }
 
 static int advance(USE Scanner s) {
     if (s->head < s->end) {
-        uchar c = *++s->head;
+        uchar c = *s->head++;
         if (c == '\n') {
             s->line++;
-            s->line_start = s->head + 1;
+            s->line_start = s->head;
         }
         return c;
     }
@@ -122,7 +123,7 @@ static bool advance_on(char chr, USE Scanner s) {
 // Definitions are orderered by common prefixes, with shorter strings after
 // longer ones, to make it easier to follow when implementing the token matching
 // logic.
-static const String TOKEN_STRINGS[TOKEN_EOF + 1] = {
+static const String LITERALS[TOKEN_EOF + 1] = {
     [TOKEN_NE]                = LITERAL("!="),
     [TOKEN_STR]               = DYNAMIC,
     [TOKEN_LOGICAL_NOT]       = LITERAL("!"),
@@ -207,12 +208,12 @@ static const String TOKEN_STRINGS[TOKEN_EOF + 1] = {
 #undef LITERAL
 
 static void skip_line_comment(USE Scanner s) {
-    while (s->head < s->end && *s->head != '\n') { advance(s); }
+    while (s->head < s->end && *s->head != '\n') advance(s);
 }
 
 static void skip_block_comment(USE Scanner s) {
     while (s->head < s->end) {
-        switch (*s->head) {
+        switch (advance(s)) {
             case '\n':
                 s->line_start = ++s->head;
                 s->line++;
@@ -232,7 +233,7 @@ static void skip_block_comment(USE Scanner s) {
 // skip past whitespace and commas
 static void skip_whitespace(USE Scanner s) {
     while (s->head < s->end) {
-        switch (peek(s)) {
+        switch (*s->head) {
             case '\n':
             case '\r':
             case ' ':
@@ -362,7 +363,7 @@ static EscapedChr esc_chr(uchar c) {
     return buf;
 }
 
-static void scan_escape_char(const char *literal_type, USE Scanner s) {
+static void scan_escape_char(const char *literal_type, uchar end, USE Scanner s) {
     int chr;
     int next;
     uchar *esc_start = s->head;
@@ -416,6 +417,7 @@ static void scan_escape_char(const char *literal_type, USE Scanner s) {
             return;
         default:
             s->start = esc_start;
+            while (s->head < s->end && *s->head != end) advance(s);
             scan_error(s, "Invalid escape sequence: '\\%s'", esc_chr(chr).text);
     }
 eof:
@@ -442,7 +444,6 @@ static enum token_type check_keyword(
 // includes a port of `identifierType` from Nystrom's Crafting Interpreters
 static enum token_type scan_word(USE Scanner s) {
     ptrdiff_t sz;
-    advance(s);
     while (is_ident_chr(peek(s))) advance(s);
     switch (*s->start) {
         case 'd':
@@ -513,7 +514,7 @@ static void scan_string_literal(USE Scanner s) {
             case -1:
                 scan_error(s, "End of file in string literal");
             case '\\':
-                scan_escape_char("string", s);
+                scan_escape_char("string", '"', s);
                 break;
             case '\n':
                 scan_error(s, "End of line in character literal.");
@@ -537,7 +538,7 @@ static void scan_char_literal(USE Scanner s) {
             }
             scan_error(s, "Empty character literal.");
         case '\\':
-            scan_escape_char("character", s);
+            scan_escape_char("character", '\'', s);
             break;
         case '\n':
             scan_error(s, "End of line in character literal");
@@ -570,7 +571,6 @@ static enum token_type read_size_suf(enum token_type base, USE Scanner s) {
 
 static enum token_type scan_bin(USE Scanner s) {
     advance(s);
-    advance(s);
     while (is_bin_digit(peek(s))) {
         advance(s);
         if (is_bin_digit(peek2(s))) advance_on('_', s);
@@ -579,7 +579,6 @@ static enum token_type scan_bin(USE Scanner s) {
 }
 
 static enum token_type scan_oct(USE Scanner s) {
-    advance(s);
     advance(s);
     while (is_oct_digit(peek(s))) {
         advance(s);
@@ -598,7 +597,6 @@ static enum token_type scan_dec(USE Scanner s) {
 
 static enum token_type scan_hex(USE Scanner s) {
     advance(s);
-    advance(s);
     while (is_hex_digit(peek(s))) {
         advance(s);
         if (is_hex_digit(peek2(s))) advance_on('_', s);
@@ -613,13 +611,13 @@ static enum token_type next_token_type(USE Scanner s) {
 
     s->start = s->head;
 
-    switch (*s->head) {
+    switch (advance(s)) {
         case '!':
             if (advance_on('=', s)) return TOKEN_NE;
             return TOKEN_LOGICAL_NOT;
         case '"':
             scan_string_literal(s);
-            return TOKEN_CHAR;
+            return TOKEN_STR;
         case '#':
             return TOKEN_POUND_SIGN;
         case '$':
@@ -633,7 +631,7 @@ static enum token_type next_token_type(USE Scanner s) {
             return TOKEN_BIT_AND;
         case '\'':
             scan_char_literal(s);
-            return TOKEN_STR;
+            return TOKEN_CHAR;
         case '(':
             return TOKEN_L_PAREN;
         case ')':
@@ -706,9 +704,9 @@ static enum token_type next_token_type(USE Scanner s) {
                     return scan_dec(s);
             }
         default:
-            if (is_ident_start(*s->head)) {
+            if (is_ident_start(s->head[-1])) {
                 return scan_word(s);
-            } else if (*s->head >= '0' && *s->head <= '9') {
+            } else if (s->head[-1] >= '0' && s->head[1] <= '9') {
                 return scan_dec(s);
             }
             scan_error(s, "Unexpected character '%s'", esc_chr(*s->head).text);
@@ -717,7 +715,6 @@ static enum token_type next_token_type(USE Scanner s) {
 
 Token next_token(USE Scanner s) {
     if (setjmp(s->jump_buf)) {
-        advance(s);
         return (Token){
             .type = TOKEN_UNPARSEABLE,
             .line = s->line,
@@ -730,13 +727,12 @@ Token next_token(USE Scanner s) {
 
     size_t len = s->head - s->start;
 
-    String lexeme = TOKEN_STRINGS[type];
+    String lexeme = LITERALS[type];
     bool should_free_text = false;
 
     if (type != TOKEN_EOF && lexeme.text != NULL) {
-        fprintf(stderr, "       len: %zu\nlexeme.len: %zu\n", lexeme.len, len);
         assert(len == lexeme.len);
-        assert(memcmp(lexeme.text, s->head, len) == 0);
+        assert(memcmp(lexeme.text, s->start, len) == 0);
     } else {
         if (len) {
             should_free_text = true;
@@ -745,8 +741,6 @@ Token next_token(USE Scanner s) {
             lexeme = (String){0, NULL};
         }
     }
-
-    advance(s);
 
     return (Token){
         .type = type,
