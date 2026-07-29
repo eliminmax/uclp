@@ -92,7 +92,6 @@ static void debug_print_token(Token TOK) {
 }
 
 int main(int argc, char *argv[]) {
-    fprintf(stderr, "argc: %d\n", argc);
     if (argc < 2) {
         char *line = NULL;
         size_t len = 0;
