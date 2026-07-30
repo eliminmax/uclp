@@ -9,6 +9,8 @@
 // long as the pool is live, and the keys are their own values, so some
 // implementation decisions I made for the general HashTable don't carry over.
 
+#include "string_manager.h"
+
 #include <stdckdint.h>
 #include <stdint.h>
 #include <string.h>
@@ -16,7 +18,6 @@
 #include "hash.h"
 #include "mem/arena.h"
 #include "mem/checked.h"
-#include "string_manager.h"
 
 static bool ident_match(String a, String b) {
     return a.len == b.len && memcmp(a.text, b.text, a.len) == 0;
@@ -84,7 +85,6 @@ String *intern(StringPool pool, const String s) {
 
     while (pool->interned[i].hash != hash ||
            !ident_match(*pool->interned[i].str, s)) {
-
         if (pool->interned[i].str == NULL) {
             pool->count++;
 

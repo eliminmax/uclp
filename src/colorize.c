@@ -3,11 +3,11 @@
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
+#include "colorize.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
-#include "colorize.h"
 
 enum color_setting COLOR_SETTING = COLOR_DEFAULT;
 
@@ -22,9 +22,7 @@ static void write_color_real(
     fprintf(out, "\x1b[%sm%.*s\x1b[m", code, len, text);
 }
 
-static const char *select_color_real(FILE *, const char * code) {
-    return code;
-}
+static const char *select_color_real(FILE *, const char *code) { return code; }
 
 static void write_color_ignore(
     const uchar *text, FILE *out, int len, const char *
@@ -32,9 +30,7 @@ static void write_color_ignore(
     fprintf(out, "%.*sm", len, text);
 }
 
-static const char *select_color_ignore(FILE*, const char *) {
-    return "";
-}
+static const char *select_color_ignore(FILE *, const char *) { return ""; }
 
 static void write_color_if_tty(
     const uchar *text, FILE *out, int len, const char *code

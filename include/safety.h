@@ -23,7 +23,7 @@
 #define UNREACHABLE(comment) unreachable()
 #else
 
-#include <stdio.h> // IWYU pragma: keep
+#include <stdio.h>  // IWYU pragma: keep
 #include <stdlib.h> // IWYU pragma: keep
 
 // An alternative to `assert` with more information provided

@@ -24,9 +24,9 @@
 #else
 #include <stdlib.h> /* IWYU pragma: keep */
 #define TRAP() abort()
-#endif /* __has_builtin(__builtin_unreachable) */
+#endif              /* __has_builtin(__builtin_unreachable) */
 
-#include <stdio.h> /* IWYU pragma: keep */
+#include <stdio.h>  /* IWYU pragma: keep */
 #define UNREACHABLE() \
     do { \
         fprintf( \

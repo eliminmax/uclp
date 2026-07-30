@@ -1,22 +1,26 @@
-# SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+# SPDX-FileCopyrightText: 2025 - 2026 Eli Array Minkoff
 #
 # SPDX-License-Identifier: 0BSD
 #
 # originally generated with https://clang-format-configurator.site/, targeting
-# clang-format version 16, since upgraded by hand. Currently targets version 19.
+# clang-format version 16, since upgraded by hand. Currently targets version 22.
 
 ---
 BasedOnStyle: Google
 AlignAfterOpenBracket: BlockIndent
+
 AlignConsecutiveBitFields:
   Enabled: true
   AcrossComments: true
   PadOperators: true
 AlignEscapedNewlines: DontAlign
 AlignTrailingComments:
-  Kind: Never
+  Kind: Always
+  OverEmptyLines: 2
 AllowShortBlocksOnASingleLine: Always
-AllowShortFunctionsOnASingleLine: None
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: WithoutElse
 BinPackArguments: false
 BinPackParameters: false
 BitFieldColonSpacing: After
@@ -44,6 +48,7 @@ LineEnding: LF
 PenaltyBreakBeforeFirstCallParameter: 0
 PenaltyReturnTypeOnItsOwnLine: 10000
 PointerAlignment: Right
+RemoveEmptyLinesInUnwrappedLines: true
 SeparateDefinitionBlocks: Always
 SpacesBeforeTrailingComments: 1
 TabWidth: 4

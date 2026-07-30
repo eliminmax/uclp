@@ -3,10 +3,11 @@
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
+#include "hash.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
-#include "hash.h"
 #include "sized_string.h"
 
 // Hash strings with the FNV-1a hash algorithm described at the following page:

@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
+#include "table.h"
+
 #include <string.h>
 
 #include "mem/checked.h"
-#include "table.h"
 
 #define STRING_DUP(s) \
     ((String){ \

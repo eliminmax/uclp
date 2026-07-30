@@ -3,6 +3,8 @@
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
+#include "scanner.h"
+
 #include <ctype.h>
 #include <setjmp.h>
 #include <stdarg.h>
@@ -13,7 +15,6 @@
 #include "colorize.h"
 #include "mem/checked.h"
 #include "safety.h"
-#include "scanner.h"
 #include "token.h"
 
 #define MAX_ERR_TOKEN_SIZE 0x1000
@@ -246,9 +247,7 @@ static void skip_whitespace(USE Scanner s) {
             case '\n':
             case '\r':
             case ' ':
-            case '\t':
-                advance(s);
-                break;
+            case '\t': advance(s); break;
             case '/':
                 advance(s);
                 if (advance_on('/', s)) {
@@ -264,8 +263,7 @@ static void skip_whitespace(USE Scanner s) {
                     s->head--;
                     return;
                 }
-            default:
-                return;
+            default: return;
         }
     }
 }
@@ -354,17 +352,14 @@ static void scan_escape_char(
     int next;
     uchar *esc_start = s->head;
     switch (chr = advance(s)) {
-        case -1:
-            goto eof;
-        case '\n':
-            scan_error(s, "End of file in %s literal", literal_type);
+        case -1: goto eof;
+        case '\n': scan_error(s, "End of file in %s literal", literal_type);
         case '\'':
         case '\"':
         case '\\':
         case 'n':
         case 'r':
-        case 't':
-            return;
+        case 't': return;
         case 'x':
             for (int i = 0; i < 2; i++) {
                 if ((chr = advance(s)) == -1 || !is_hex_digit(chr)) {
@@ -413,28 +408,24 @@ eof:
 static void scan_string_literal(USE Scanner s) {
     while (!advance_on('"', s)) {
         switch (peek(s)) {
-            case -1:
-                scan_error(s, "End of file in string literal");
+            case -1: scan_error(s, "End of file in string literal");
             case '\\':
                 s->head++;
                 scan_escape_char("string", '"', s);
                 break;
-            case '\n':
-                scan_error(s, "End of line in string literal");
+            case '\n': scan_error(s, "End of line in string literal");
             case '\"':
                 UNREACHABLE(
                     "advance_on('\"') would have ended the string at loop start"
                 );
-            default:
-                s->head++;
+            default: s->head++;
         }
     }
 }
 
 static void scan_char_literal(USE Scanner s) {
     switch (peek(s)) {
-        case -1:
-            scan_error(s, "End of file in character literal");
+        case -1: scan_error(s, "End of file in character literal");
         case '\'':
             s->head++;
             if (advance_on('\'', s)) {
@@ -445,10 +436,8 @@ static void scan_char_literal(USE Scanner s) {
             s->head++;
             scan_escape_char("character", '\'', s);
             break;
-        case '\n':
-            scan_error(s, "End of line in character literal");
-        default:
-            s->head++;
+        case '\n': scan_error(s, "End of line in character literal");
+        default: s->head++;
     }
     if (!advance_on('\'', s)) {
         scan_error(s, "Missing end of character literal");
@@ -540,12 +529,9 @@ static enum token_type scan_numeric(USE Scanner s) {
     REQUIRE(s->head[-1] >= '0' && s->head[-1] <= '9');
     if (s->head[-1] == '0') {
         switch (peek(s)) {
-            case 'b':
-                return scan_bin(s);
-            case 'o':
-                return scan_oct(s);
-            case 'x':
-                return scan_hex(s);
+            case 'b': return scan_bin(s);
+            case 'o': return scan_oct(s);
+            case 'x': return scan_hex(s);
         }
     }
     return scan_dec(s);
@@ -601,8 +587,7 @@ static enum token_type signed_op(USE Scanner s) {
                 return TOKEN_SHR_ARITH;
             }
             return TOKEN_SIGNED_GT;
-        default:
-            return TOKEN_UNPARSEABLE;
+        default: return TOKEN_UNPARSEABLE;
     }
 }
 
@@ -628,36 +613,26 @@ static enum token_type scan_word(USE Scanner s) {
     ptrdiff_t sz;
     while (is_ident_chr(peek(s))) advance(s);
     switch (*s->start) {
-        case 'd':
-            return check_keyword(1, 6, "ynamic", TOKEN_DYNAMIC, s);
-        case 'e':
-            return check_keyword(1, 3, "lse", TOKEN_ELSE, s);
-            break;
+        case 'd': return check_keyword(1, 6, "ynamic", TOKEN_DYNAMIC, s);
+        case 'e': return check_keyword(1, 3, "lse", TOKEN_ELSE, s); break;
         case 'f':
             if (s->head - s->start > 1) {
                 switch (s->start[1]) {
                     case 'o':
                         return check_keyword(1, 6, "oreach", TOKEN_FOREACH, s);
-                    case 'u':
-                        return check_keyword(1, 3, "unc", TOKEN_FUNC, s);
+                    case 'u': return check_keyword(1, 3, "unc", TOKEN_FUNC, s);
                 }
             }
             break;
         case 'i':
             if ((sz = s->head - s->start) > 1) {
                 switch (s->start[1]) {
-                    case '1':
-                        return check_keyword(2, 1, "6", TOKEN_I16, s);
-                    case '3':
-                        return check_keyword(2, 1, "2", TOKEN_I32, s);
-                    case '6':
-                        return check_keyword(2, 1, "4", TOKEN_I64, s);
-                    case '8':
-                        return sz == 2 ? TOKEN_I8 : TOKEN_IDENT;
-                    case 'f':
-                        return sz == 2 ? TOKEN_IF : TOKEN_IDENT;
-                    case 'n':
-                        return sz == 2 ? TOKEN_IN : TOKEN_IDENT;
+                    case '1': return check_keyword(2, 1, "6", TOKEN_I16, s);
+                    case '3': return check_keyword(2, 1, "2", TOKEN_I32, s);
+                    case '6': return check_keyword(2, 1, "4", TOKEN_I64, s);
+                    case '8': return sz == 2 ? TOKEN_I8 : TOKEN_IDENT;
+                    case 'f': return sz == 2 ? TOKEN_IF : TOKEN_IDENT;
+                    case 'n': return sz == 2 ? TOKEN_IN : TOKEN_IDENT;
                 }
             }
             break;
@@ -677,8 +652,7 @@ static enum token_type scan_word(USE Scanner s) {
                 return TOKEN_SYS;
             }
             return check_keyword(1, 5, "tatic", TOKEN_STATIC, s);
-        case 'w':
-            return check_keyword(1, 4, "hile", TOKEN_WHILE, s);
+        case 'w': return check_keyword(1, 4, "hile", TOKEN_WHILE, s);
     }
     return TOKEN_IDENT;
 }
@@ -696,13 +670,9 @@ static enum token_type next_token_type(USE Scanner s) {
         case '!':
             if (advance_on('=', s)) return TOKEN_NE;
             return TOKEN_LOGICAL_NOT;
-        case '"':
-            scan_string_literal(s);
-            return TOKEN_STR;
-        case '#':
-            return TOKEN_POUND_SIGN;
-        case '$':
-            return signed_op(s);
+        case '"': scan_string_literal(s); return TOKEN_STR;
+        case '#': return TOKEN_POUND_SIGN;
+        case '$': return signed_op(s);
         case '%':
             if (advance_on('=', s)) return TOKEN_MOD_ASSIGN;
             return TOKEN_MOD;
@@ -710,21 +680,16 @@ static enum token_type next_token_type(USE Scanner s) {
             if (advance_on('&', s)) return TOKEN_LOGICAL_AND;
             if (advance_on('=', s)) return TOKEN_BIT_AND_ASSIGN;
             return TOKEN_BIT_AND;
-        case '\'':
-            scan_char_literal(s);
-            return TOKEN_CHAR;
-        case '(':
-            return TOKEN_L_PAREN;
-        case ')':
-            return TOKEN_R_PAREN;
+        case '\'': scan_char_literal(s); return TOKEN_CHAR;
+        case '(': return TOKEN_L_PAREN;
+        case ')': return TOKEN_R_PAREN;
         case '*':
             if (advance_on('=', s)) return TOKEN_MUL_ASSIGN;
             return TOKEN_MUL;
         case '+':
             if (advance_on('=', s)) return TOKEN_PLUS_ASSIGN;
             return TOKEN_PLUS;
-        case ',':
-            return TOKEN_COMMA;
+        case ',': return TOKEN_COMMA;
         case '-':
             if (advance_on('=', s)) return TOKEN_MINUS_ASSIGN;
             if (advance_on('>', s)) return TOKEN_ARROW;
@@ -742,8 +707,7 @@ static enum token_type next_token_type(USE Scanner s) {
             }
             if (advance_on('{', s)) return TOKEN_TYPE_CAST;
             return TOKEN_COLON;
-        case ';':
-            return TOKEN_SEMICOLON;
+        case ';': return TOKEN_SEMICOLON;
         case '<':
             if (advance_on('<', s)) {
                 if (advance_on('=', s)) return TOKEN_SHL_ASSIGN;
@@ -761,21 +725,17 @@ static enum token_type next_token_type(USE Scanner s) {
             }
             if (advance_on('=', s)) return TOKEN_GE;
             return TOKEN_GT;
-        case '[':
-            return TOKEN_L_SQUARE;
-        case ']':
-            return TOKEN_R_SQUARE;
+        case '[': return TOKEN_L_SQUARE;
+        case ']': return TOKEN_R_SQUARE;
         case '^':
             if (advance_on('=', s)) return TOKEN_BIT_XOR_ASSIGN;
             return TOKEN_BIT_XOR;
-        case '{':
-            return TOKEN_L_CURLY;
+        case '{': return TOKEN_L_CURLY;
         case '|':
             if (advance_on('=', s)) return TOKEN_BIT_OR_ASSIGN;
             if (advance_on('|', s)) return TOKEN_LOGICAL_OR;
             return TOKEN_BIT_OR;
-        case '}':
-            return TOKEN_R_CURLY;
+        case '}': return TOKEN_R_CURLY;
         default:
             if (is_ident_start(s->head[-1])) {
                 return scan_word(s);
@@ -831,6 +791,4 @@ Token next_token(USE Scanner s) {
     };
 }
 
-void free_scanner([[clang::release_handle("scanner")]] Scanner s) {
-    free(s);
-}
+void free_scanner([[clang::release_handle("scanner")]] Scanner s) { free(s); }
