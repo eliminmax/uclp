@@ -93,12 +93,13 @@ static void debug_print_token(Token TOK) {
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
+        StringPool idents = new_pool();
         char *line = NULL;
         size_t len = 0;
         ssize_t sz;
         while ((sz = getline(&line, &len, stdin)) != -1) {
             len = sz;
-            Scanner scanner = start_scanner((String){len, line});
+            Scanner scanner = start_scanner((String){len, line}, idents);
             Token t;
             while ((t = next_token(scanner)).type != TOKEN_EOF) {
                 debug_print_token(t);
@@ -108,15 +109,18 @@ int main(int argc, char *argv[]) {
         }
         if (errno) {
             perror("Failed to read input");
+            free_pool(idents);
             free(line);
             return 1;
         }
+        free_pool(idents);
         free(line);
         return 0;
     } else if (argc == 2) {
         bool had_error = false;
+        StringPool idents = new_pool();
         String source = read_source(argv[1]);
-        Scanner scanner = start_scanner(source);
+        Scanner scanner = start_scanner(source, idents);
         Token t;
         while ((t = next_token(scanner)).type != TOKEN_EOF) {
             if (t.type == TOKEN_UNPARSEABLE) had_error = true;
@@ -127,6 +131,7 @@ int main(int argc, char *argv[]) {
 
         free_scanner(scanner);
         free(source.text);
+        free_pool(idents);
         return had_error;
     }
 }

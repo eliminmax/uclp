@@ -37,15 +37,19 @@ struct scanner {
     uchar NODEREF *end;
     size_t line;
     jmp_buf jump_buf;
+    StringPool ident_pool;
 };
 
 [[clang::acquire_handle("scanner")]]
-Scanner start_scanner(String source) {
+Scanner start_scanner(
+    String source, [[clang::use_handle("pool")]] StringPool ident_pool
+) {
     Scanner s = checked_malloc(sizeof(struct scanner));
     s->line = 1;
     s->source_size = source.len;
     s->line_start = s->start = s->head = s->source = (uchar *)source.text;
     s->end = &s->source[s->source_size];
+    s->ident_pool = ident_pool;
     return s;
 }
 
@@ -806,6 +810,10 @@ Token next_token(USE Scanner s) {
             type == TOKEN_EOF ||
             (len == lexeme.len && memcmp(lexeme.text, s->start, len) == 0)
         );
+    } else if (type == TOKEN_IDENT) {
+        String ident = get_lexeme(s);
+        lexeme = *intern(s->ident_pool, ident);
+        free(ident.text);
     } else {
         if (len) {
             lexeme = get_lexeme(s);
