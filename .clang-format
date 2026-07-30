@@ -41,10 +41,6 @@ IndentWidth: 4
 InsertNewlineAtEOF: true
 InsertTrailingCommas: Wrapped
 LineEnding: LF
-Macros:
-  # not actual definitions, but works for formatting
-  - BASIC_FORMAT(T)=T;
-  - FORMAT(T)=T;
 PenaltyBreakBeforeFirstCallParameter: 0
 PenaltyReturnTypeOnItsOwnLine: 10000
 PointerAlignment: Right
