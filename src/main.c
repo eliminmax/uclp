@@ -48,7 +48,7 @@ static String read_source(const char *path) {
             break;
         }
         case EBADF:
-            unreachable();
+            UNREACHABLE("fd was just opened");
         case ESPIPE:
         case EINVAL:
         case EOVERFLOW: {
@@ -73,6 +73,7 @@ static String read_source(const char *path) {
             exit(2);
         }
     }
+    close(fd);
     return s;
 
 read_error:
