@@ -220,7 +220,7 @@ static const String LITERALS[TOKEN_EOF + 1] = {
     [TOKEN_OPAQUE_64]             = DYNAMIC,
     [TOKEN_STATIC]                = LITERAL("static"),
     [TOKEN_WHILE]                 = LITERAL("while"),
-    [TOKEN_EOF]                  = LITERAL(""),
+    [TOKEN_EOF]                   = LITERAL(""),
     // leave the rest as {0, NULL}
     [TOKEN_INT_BIN ... TOKEN_UNPARSEABLE] = DYNAMIC,
 };
@@ -405,6 +405,7 @@ static void scan_escape_char(
 eof:
     scan_error(s, "End of file in %s literal", literal_type);
 }
+
 static void scan_string_literal(USE Scanner s) {
     while (!advance_on('"', s)) {
         switch (peek(s)) {
@@ -450,7 +451,9 @@ static void scan_char_literal(USE Scanner s) {
     }
 }
 
-static enum token_type scan_size(enum token_type base, const char *kind, USE Scanner s) {
+static enum token_type scan_size(
+    enum token_type base, const char *kind, USE Scanner s
+) {
     if (advance_on('8', s)) return base;
     if (advance_on('1', s)) {
         if (advance_on('6', s)) return base + 1;
@@ -533,9 +536,12 @@ static enum token_type scan_numeric(USE Scanner s) {
     REQUIRE(s->head[-1] >= '0' && s->head[-1] <= '9');
     if (s->head[-1] == '0') {
         switch (peek(s)) {
-            case 'b': return scan_bin(s);
-            case 'o': return scan_oct(s);
-            case 'x': return scan_hex(s);
+            case 'b':
+                return scan_bin(s);
+            case 'o':
+                return scan_oct(s);
+            case 'x':
+                return scan_hex(s);
         }
     }
     return scan_dec(s);
@@ -546,7 +552,6 @@ static enum token_type finish_cast(enum token_type base, USE Scanner s) {
     if (!advance_on(']', s)) scan_error(s, "Missing end of size cast");
     return type;
 }
-
 
 static enum token_type scan_opaque(USE Scanner s) {
     if (!advance_on('.', s)) scan_error(s, "Expect '.' in opaque type");
@@ -565,7 +570,7 @@ static void scan_syscall(USE Scanner s) {
 }
 
 static enum token_type signed_op(USE Scanner s) {
-    if (++s->head == s->end) [[clang::unlikely]] return TOKEN_UNPARSEABLE;
+    if (++s->head == s->end) [[clang::unlikely]] { return TOKEN_UNPARSEABLE; }
 
     switch (*s->head) {
         case '%':
@@ -794,15 +799,17 @@ Token next_token(USE Scanner s) {
     size_t len = s->head - s->start;
 
     String lexeme = LITERALS[type];
-    bool should_free_text = false;
+    bool should_free_text = lexeme.text == NULL;
 
-    if (type != TOKEN_EOF && lexeme.text != NULL) {
-        assert(len == lexeme.len);
-        assert(memcmp(lexeme.text, s->start, len) == 0);
+    if (lexeme.text != NULL) {
+        assert(
+            type == TOKEN_EOF ||
+            (len == lexeme.len && memcmp(lexeme.text, s->start, len) == 0)
+        );
     } else {
         if (len) {
-            should_free_text = true;
             lexeme = get_lexeme(s);
+            should_free_text = true;
         } else {
             lexeme = (String){0, NULL};
         }

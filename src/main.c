@@ -123,6 +123,8 @@ int main(int argc, char *argv[]) {
             debug_print_token(t);
             destroy_token(t);
         }
+        assert(t.should_free_text == false);
+
         free_scanner(scanner);
         free(source.text);
         return had_error;

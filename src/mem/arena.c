@@ -5,14 +5,14 @@
  *
  */
 
-#include "mem/arena.h"
-
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "mem/arena.h"
 #include "mem/checked.h"
+#include "typenames.h"
 static constexpr size_t ALLOC_SEGMENT_SIZE = sizeof(intmax_t[0x1000]);
 // the maximum size to keep within a segment
 static constexpr size_t MAX_ALLOC_INLINE_SIZE = ALLOC_SEGMENT_SIZE / 2;
@@ -30,7 +30,7 @@ struct alloc_group {
 };
 
 struct alloc_segment {
-    alignas(max_align_t) char data[ALLOC_SEGMENT_SIZE];
+    alignas(max_align_t) uchar data [[gnu::nonstring]][ALLOC_SEGMENT_SIZE];
 };
 
 // a singly-linked list of large allocations
@@ -41,10 +41,12 @@ struct large_alloc {
 
 [[clang::acquire_handle("alloc_group")]] AllocGroup group_create() {
     AllocGroup arena = checked_malloc(sizeof(struct alloc_group));
-    arena->segments = checked_malloc(sizeof(struct alloc_segment));
 
     struct segment_handler *head_seg =
         checked_malloc(sizeof(struct segment_handler));
+    head_seg->used = 0;
+    head_seg->next = NULL;
+    head_seg->segment = checked_malloc(ALLOC_SEGMENT_SIZE);
 
     arena->segments = head_seg;
     arena->large_allocs = NULL;
@@ -109,11 +111,12 @@ void group_free(
         large = large->next;
     }
 
-    struct segment_handler *segment, *next = arena->segments;
-    while ((segment = next)) {
+    struct segment_handler *segment, *next;
+    segment = arena->segments;
+    do {
         next = segment->next;
         free(segment->segment);
         free(segment);
-    }
+    } while (next);
     free(arena);
 }
