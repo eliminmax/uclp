@@ -8,6 +8,7 @@
 #define UCLP_AST
 #include <stdint.h>
 
+#include "include/token.h"
 #include "lang/types.h"
 #include "sized_string.h"
 #include "tagged_union.h"
@@ -23,15 +24,10 @@ struct place {
         struct expression *_Nonnull ptr;
 
         struct array_member {
-            struct array *_Nonnull array;
+            struct expression *_Nonnull array;
             size_t offset;
         } arr_mem;
     };
-};
-
-struct array {
-    UCLType type;
-    size_t size;
 };
 
 typedef enum : uint8_t { STORE_STACK, STORE_STATIC } Placement;
@@ -49,23 +45,96 @@ struct conditional {
     struct block *_Nullable else_body;
 };
 
+typedef struct expression {
+    TU_ENUM(
+        tag,
+        uint8_t,
+        // identifiers starting with "E" followed by a number or another
+        // upprecase letter are reserved for system errors
+        XPR_LITERAL,
+        XPR_VAR,
+        XPR_UNARY,
+        XPR_BINARY,
+        XPR_FUNC_CALL,
+        XPR_GROUP,
+        XPR_TYPECAST,
+        XPR_ARRAY,
+        XPR_ASSIGN,
+        XPR_INDEX,
+    );
+
+    union {
+        struct unary_expression {
+            TokenType op;
+            struct expression *_Nonnull operand;
+        } unary;
+
+        struct binary_expression {
+            TokenType op;
+            struct expression *_Nonnull operands[2];
+        } binary;
+
+        struct type_cast {
+            struct expression *_Nonnull inner;
+        } type_cast;
+
+        struct function_call *_Nonnull func_call;
+        struct array_definition *_Nonnull array;
+
+        String *_Nonnull var_name;
+
+        struct index_expression {
+            struct expression *_Nonnull array;
+            struct expression *_Nonnull index;
+        } index;
+        struct expression *_Nonnull grouped;
+        struct literal_expression {
+            TU_ENUM(tag, uint8_t, LIT_STR, LIT_I8, LIT_I16, LIT_I32, LIT_I64);
+
+            union {
+                String string;
+                ucl_i8 _i8;
+                ucl_i16 _i16;
+                ucl_i32 _i32;
+                ucl_i64 _i64;
+            };
+        } literal;
+
+    };
+
+    UCLType *_Nonnull type;
+} UCLExpression;
+
+struct array_definition {
+    UCLType *_Nonnull type;
+    size_t size;
+    UCLExpression *vals [[clang::counted_by(size)]][];
+};
+
 // a single program statement - can be one of the following:
 //
 // * A variable declaration (with or without initial value)
 // * An assignment
 // * A block of expressions which run within their own scope.
 // * A conditional or series of conditionals
-struct statement {
+typedef struct statement {
     TU_ENUM(
         tag,
         uint8_t,
-        STMT_DECL,
-        STMT_ASSIGN,
         STMT_BLOCK,
-        STMT_COND,
+        STMT_IF,
         STMT_WHILE,
         STMT_FOREACH,
-        STMT_FUNC_CALL
+        STMT_RETURN,
+        STMT_EXPR,
+        STMT_BREAK,
+        STMT_VAR_DEC,
+        STMT_FUN_DEC,
+        STMT_EXTERN_VAR,
+        STMT_EXTERN_FUN,
+        STMT_SYSCALL,
+        STMT_END,
+        STMT_UNPARSABLE,
     );
 
     union {
@@ -96,89 +165,19 @@ struct statement {
             struct block *_Nonnull body;
         } foreach_loop;
 
-        struct function_call *_Nonnull function_call;
+        struct expression *_Nonnull expr;
     };
-};
+} Statement;
 
 // A sequence of expressions within their own scope;
 struct block {
     size_t body_size;
-    struct statement *_Nonnull statements [[clang::counted_by(body_size)]];
+    Statement *_Nonnull statements [[clang::counted_by(body_size)]];
     UCLType *_Nullable return_type;
 };
 
-struct expression {
-    TU_ENUM(
-        tag,
-        uint8_t,
-        // identifiers starting with "E" followed by a number or another
-        // upprecase letter are reserved for system errors
-        XPR_LITERAL,
-        XPR_VAR,
-        XPR_UNARY,
-        XPR_BINARY,
-        XPR_FUNC_CALL,
-    );
-
-    union {
-        struct unary_expression {
-            TU_ENUM(
-                tag,
-                uint8_t,
-                UNARY_LOGNOT,
-                UNARY_BITNOT,
-                UNARY_NEG,
-                UNARY_CAST_S,
-                UNARY_CAST_U,
-                UNARY_ADDROF,
-                UNARY_DEREF
-            );
-            struct expression *_Nonnull operand;
-        } unary;
-
-        struct binary_expression {
-            TU_ENUM(
-                tag,
-                uint8_t,
-                BINARY_MUL_U,
-                BINARY_DIV_U,
-                BINARY_MOD_U,
-                BINARY_MUL_S,
-                BINARY_DIV_S,
-                BINARY_MOD_S,
-                BINARY_ADD,
-                BINARY_SUB,
-                BINARY_BITAND,
-                BINARY_BITOR,
-                BINARY_BITXOR,
-                BINARY_SHIFTR_U,
-                BINARY_SHIFTR_S,
-                BINARY_SHIFTL,
-                BINARY_CMP_EQ,
-                BINARY_CMP_NE,
-                BINARY_CMP_LT_U,
-                BINARY_CMP_GT_U,
-                BINARY_CMP_LE_U,
-                BINARY_CMP_GE_U,
-                BINARY_CMP_LT_S,
-                BINARY_CMP_GT_S,
-                BINARY_CMP_LE_S,
-                BINARY_CMP_GE_S,
-                BINARY_LOGAND,
-                BINARY_LOGOR,
-            );
-            struct expression *_Nonnull operands[2];
-        } binary;
-
-        String var_name;
-        void *_Nonnull literal;
-    };
-
-    UCLType *_Nonnull type;
-};
-
 struct function_call {
-    String name;
+    struct expression *_Nonnull callee;
     uint8_t nargs;
     struct expression *_Nonnull args [[clang::counted_by(nargs)]];
 };

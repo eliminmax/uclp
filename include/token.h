@@ -14,17 +14,17 @@
 
 #define DEFINE_TOKENS
 
-enum token_type : uint8_t {
+typedef enum token_type : uint8_t {
 
 #include "lang/tokens.h"
 
-};
+} TokenType;
 
 typedef struct token {
     String lexeme;
     size_t line;
 
-    enum token_type type;
+    TokenType type;
     bool should_free_text;
 } Token;
 

@@ -15,3 +15,8 @@ Scanner start_scanner(
 );
 Token next_token([[clang::use_handle("scanner")]] Scanner);
 void free_scanner([[clang::release_handle("scanner")]] Scanner);
+
+[[gnu::cold, gnu::format(__printf__, 2, 3), noreturn]]
+void scan_error(
+    [[clang::use_handle("scanner")]] Scanner s, const char *_Nonnull fmt, ...
+);

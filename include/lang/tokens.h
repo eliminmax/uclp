@@ -17,6 +17,7 @@
 switch (TOK.type) {
 #elifndef TOKEN
 #warning "define TOKEN, DEFINE_TOKENS or DEBUG_TOKENS before including tokens.h"
+#define DUMMY_ENUM
 
 enum : unsigned char {
 
@@ -136,9 +137,9 @@ TOKEN(WHILE)        // "while"
 // literal tokens
 TOKEN(STR)
 TOKEN(CHAR)
-SIZABLE_TOKEN(INT_DEC)
 SIZABLE_TOKEN(INT_BIN)
 SIZABLE_TOKEN(INT_OCT)
+SIZABLE_TOKEN(INT_DEC)
 SIZABLE_TOKEN(INT_HEX)
 
 TOKEN(IDENT)       // identifier
@@ -153,6 +154,7 @@ TOKEN(EOF)
 #elifdef DEBUG_TOKENS
 #undef DEBUG_TOKENS
 }
-#else
+#elifdef DUMMY_ENUM
+#undef DUMMY_ENUM
 };
 #endif

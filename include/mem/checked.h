@@ -15,7 +15,7 @@
     size_t nmemb, size_t size
 ) {
     void *ptr = calloc(nmemb, size);
-    if (!ptr) {
+    if (!ptr) [[clang::unlikely]] {
         perror("memory allocation failed in checked_calloc");
         abort();
     }
@@ -26,7 +26,7 @@
 // underlying call to `malloc` returns `NULL`.
 [[gnu::returns_nonnull]] inline void *_Nonnull checked_malloc(size_t size) {
     void *ptr = malloc(size);
-    if (!ptr) {
+    if (!ptr) [[clang::unlikely]] {
         perror("memory allocation failed in checked_malloc");
         abort();
     }
@@ -39,7 +39,7 @@
     void *_Nullable ptr, size_t size
 ) {
     void *new_ptr = realloc(ptr, size);
-    if (!new_ptr) {
+    if (!new_ptr) [[clang::unlikely]] {
         perror("memory allocation failed in checked_realloc");
         abort();
     }
@@ -52,7 +52,7 @@
     void *_Nullable ptr, size_t nmemb, size_t size
 ) {
     void *new_ptr = reallocarray(ptr, nmemb, size);
-    if (!new_ptr) {
+    if (!new_ptr) [[clang::unlikely]] {
         perror("memory allocation failed in checked_reallocarray");
         abort();
     }
@@ -63,7 +63,7 @@
     size_t alignment, size_t size
 ) {
     void *ptr = aligned_alloc(alignment, size);
-    if (!ptr) {
+    if (!ptr) [[clang::unlikely]] {
         perror("memory allocation failed in checked_aligned_alloc");
         abort();
     }

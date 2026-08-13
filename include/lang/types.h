@@ -44,29 +44,27 @@ typedef union {
     uint64_t u;
 } ucl_i64;
 
+typedef enum Alignment {
+    ALIGN_DYNAMIC = 0,
+    ALIGN_8 = 8,
+    ALIGN_16 = 16,
+    ALIGN_32 = 32,
+    ALIGN_64 = 64,
+    ALIGN_PTR = ALIGN_64,
+} Alignment;
+
 // A struct which represents a pointer to the underlying type
 struct ucl_pointer {
     struct ucl_type *_Nullable pointee_type;
 
-    enum {
-        PTR_ALIGN_DYNAMIC = 0,
-        PTR_ALIGN_8 = 8,
-        PTR_ALIGN_16 = 16,
-        PTR_ALIGN_32 = 32,
-        PTR_ALIGN_64 = 64
-    } alignment;
+    Alignment alignment;
 };
 
 // a struct which represents an opaque type's size and alignment
 struct ucl_opaque_type {
     size_t size;
 
-    enum {
-        OPAQUE_ALIGN_8 = 8,
-        OPAQUE_ALIGN_16 = 16,
-        OPAQUE_ALIGN_32 = 32,
-        OPAQUE_ALIGN_64 = 64
-    } alignment;
+    Alignment alignment;
 };
 
 // a struct which represents an array's type and length
@@ -93,5 +91,7 @@ typedef struct ucl_type {
         struct ucl_array array;
     };
 } UCLType;
+
+Alignment ucl_alignof(UCLType *_Nonnull type); 
 
 #endif /* UCLP_TYPES_H */

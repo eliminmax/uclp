@@ -12,20 +12,13 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "annotations.h"
 #include "colorize.h"
 #include "mem/checked.h"
 #include "safety.h"
 #include "token.h"
 
 #define MAX_ERR_TOKEN_SIZE 0x1000
-
-#define NODEREF
-#ifdef __has_attribute
-#if __has_attribute(__noderef__)
-#undef NODEREF
-#define NODEREF __attribute__((__noderef__))
-#endif
-#endif
 
 #define USE [[clang::use_handle("scanner")]]
 
@@ -55,7 +48,7 @@ Scanner start_scanner(
 }
 
 [[gnu::cold, gnu::format(__printf__, 2, 3), noreturn]]
-static void scan_error(USE Scanner s, const char *_Nonnull fmt, ...) {
+void scan_error(USE Scanner s, const char *_Nonnull fmt, ...) {
     REQUIRE(s->start < s->end);
     REQUIRE(*s->start < 0x80);
 

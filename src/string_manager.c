@@ -39,9 +39,9 @@ constexpr Interned INIT_STATE[8] = {[0 ... 7] = (Interned){NULL, 0}};
 
 static String EMPTY_STRING;
 
-StringPool new_pool() {
+StringPool new_pool(AllocGroup group) {
     StringPool pool = checked_malloc(sizeof(struct string_pool));
-    pool->allocs = group_create();
+    pool->allocs = group;
     pool->count = 0;
     pool->capacity = 8;
     pool->interned = memcpy(
@@ -113,7 +113,7 @@ String *intern(StringPool pool, const String s) {
 }
 
 void free_pool(StringPool pool) {
-    group_free(pool->allocs);
-    free(pool->interned);
     free(pool);
 }
+
+extern inline bool pooled_streq(const String, const String);

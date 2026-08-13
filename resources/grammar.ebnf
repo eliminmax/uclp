@@ -81,7 +81,7 @@ unary = { "!" | "~" | "-" | "&" | "*" | (["$"], ":[", unit size, "]") },
 index = atom, { "[", sp, EXPR, "]" } ;
 
 atom = (literal
-       | (identifier, [sp, "()"])
+       | (identifier, [ sp, "(", sp, [ EXPR, { ",", sp, EXPR } ], ")" ])
        | ("(", sp, EXPR, ")")
        | array definition), sp ;
 deref = "*", sp, EXPR ;
@@ -116,12 +116,16 @@ foreach = loop name, "foreach", sp, "(", identifier, sp, "in", sp, ;
 return = "return", sp, [ EXPR ], ";" ;
 break = "break", sp, [ identifier, sp ], ";" ;
 
-expr stmt = expr, ";" ;
+expr stmt = EXPR, ";" ;
+
+
+assign op = [ bit shift | bitwise | sum | product ], "=", sp;
+
+assignment = identifier, sp, { "[", sp, EXPR "]", sp }, assign op, sp EXPR ;
 
 STMT = (block
-         | if | while | foreach | return
-         | expr stmt
+         | if | while | foreach | return | expr stmt | break
          | variable declaration | function declaration
-         | extern variable | extern function), sp;
+         | extern variable | extern function | syscall), sp;
 
 (* vi: set ft=ebnf: *)
