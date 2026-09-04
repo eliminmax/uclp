@@ -21,18 +21,23 @@
 #include "mem/arena.h"
 #include "mem/checked.h"
 #include "mem/dynarray.h"
+#include "parser.h"
 #include "scanner.h"
 #include "sized_string.h"
 #include "string_manager.h"
 #include "table.h"
+#include "todo.h"
 #include "token.h"
+#include "typeck.h"
 
 #define USE [[clang::use_handle("parser")]]
-
-// see https://stackoverflow.com/a/43788824
+// Approximation of ditigs in SIZE_MAX; see https://stackoverflow.com/a/43788824
 constexpr size_t MAX_SIZE_DIGITS = ((sizeof(size_t) * CHAR_BIT) * 28 / 93 + 2);
 
-typedef struct parser *_Nonnull Parser;
+typedef UCLExpression *_Nonnull (*PrefixFn)(USE Parser, bool assignable);
+typedef UCLExpression *_Nonnull (*InfixFn)(
+    USE Parser, bool assignable, UCLExpression *_Nonnull
+);
 
 struct var_scope {
     struct var_scope *_Nullable outer;
@@ -41,9 +46,15 @@ struct var_scope {
 
 struct parser {
     Scanner scanner;
-    AllocGroup allocs;
+    AllocGroup ag;
     StringPool idents;
     HashTable types;
+
+    struct {
+        size_t count;
+        size_t cap;
+        void **ptrs;
+    } build_allocs;
     struct var_scope current_vars;
     size_t ntokens;
     size_t token_cap;
@@ -52,22 +63,25 @@ struct parser {
     Token *tokens [[clang::counted_by(ntokens)]];
 };
 
-typedef UCLExpression *_Nullable (*PrefixFn)(USE Parser, bool assignable);
-typedef UCLExpression *_Nullable (*InfixFn)(
-    USE Parser, bool assignable, UCLExpression *_Nonnull
-);
 
-static void *_Nonnull tracked_allocate(USE Parser, size_t sz) {
-    return checked_malloc(sz);
+static void *_Nonnull tracked_alloc(USE Parser p, size_t sz) {
+    if (p->build_allocs.count == p->build_allocs.cap) {
+        p->build_allocs.cap = new_capacity(p->build_allocs.cap);
+        p->build_allocs.ptrs = checked_reallocarray(
+            p->build_allocs.ptrs, p->build_allocs.cap, sizeof(void **)
+        );
+    }
+    return p->build_allocs.ptrs[p->build_allocs.count++] = checked_malloc(sz);
 }
 
-#define ALLOCATE(p, t) tracked_allocate((p), sizeof(t))
+#define ALLOCATE(p, t) tracked_alloc((p), sizeof(t))
 
 [[gnu::cold, gnu::format(__printf__, 3, 4), noreturn]]
 static void error_at(USE Parser p, ssize_t offset, const char *fmt, ...) {
     REQUIRE(offset >= 0 || (size_t)(-offset) < p->next_tok_i);
 
     Token t = p->tokens[p->next_tok_i - 1 + offset];
+    if (t.type == TOKEN_UNPARSEABLE) longjmp(p->errbuf, 1);
     fputs("Error at '", stderr);
     fwrite(t.lexeme.text, t.lexeme.len, 1, stderr);
     va_list fmt_args;
@@ -77,56 +91,13 @@ static void error_at(USE Parser p, ssize_t offset, const char *fmt, ...) {
     longjmp(p->errbuf, 1);
 }
 
-static UCLType *_Nonnull type_of_binding(
+UCLType *_Nonnull type_of_binding(
     USE Parser p, struct var_scope *_Nonnull scope, const String *ident
 ) {
     UCLType *type;
     if ((type = ht_lookup(scope->vars, *ident))) { return type; }
     if (scope->outer) return type_of_binding(p, scope->outer, ident);
-    error_at(p, 0, "");
-}
-
-Alignment ucl_alignof(UCLType *_Nonnull type) {
-    switch (type->tag) {
-        case TYPE_OPAQUE: return type->opaque.alignment;
-        case TYPE_I8: return ALIGN_8;
-        case TYPE_I16: return ALIGN_16;
-        case TYPE_I32: return ALIGN_32;
-        case TYPE_I64: return ALIGN_64;
-        case TYPE_POINTER: return ALIGN_PTR;
-        case TYPE_ARRAY: return ucl_alignof(type->array.member_type);
-    }
-}
-
-static void write_type(UCLType *type, CharBuffer *buf) {
-    switch (type->tag) {
-        case TYPE_POINTER:
-            append_chars(buf, 1, u8"*");
-            if (type->ptr.pointee_type) {
-                write_type(type->ptr.pointee_type, buf);
-            } else {
-                append_chars(buf, 7, u8"dynamic");
-            }
-            break;
-        case TYPE_OPAQUE: {
-            struct ucl_opaque_type opaque = type->opaque;
-            char numbuf[MAX_SIZE_DIGITS + 11];
-            size_t sz =
-                sprintf(numbuf, "opaque.%zu.%d", opaque.size, opaque.alignment);
-            append_chars(buf, sz, (uchar *)numbuf);
-            break;
-        }
-        case TYPE_I8: append_chars(buf, 2, u8"i8"); break;
-        case TYPE_I16: append_chars(buf, 3, u8"i16"); break;
-        case TYPE_I32: append_chars(buf, 3, u8"i32"); break;
-        case TYPE_I64: append_chars(buf, 3, u8"i63"); break;
-        case TYPE_ARRAY: {
-            write_type(type->array.member_type, buf);
-            char numbuf[MAX_SIZE_DIGITS + 3];
-            size_t sz = sprintf(numbuf, "[%zu]", type->array.len);
-            append_chars(buf, sz, (uchar *)numbuf);
-        }
-    }
+    error_at(p, 0, "Unknown type");
 }
 
 // `number_at` is implemented with the knowledge that the TOKEN_INT_* enums are
@@ -194,7 +165,11 @@ static uintmax_t number_at(USE Parser p, int offset, int fallback) {
     return val;
 
 too_large:
-    error_at(p, offset, "");
+    if (t.lexeme.len > 0x1000) {
+        error_at(p, offset, "'%4093s...'", t.lexeme.text);
+    } else {
+        error_at(p, offset, "'%.*s'", (int)t.lexeme.len, t.lexeme.text);
+    }
 }
 
 static inline void init_type_map(USE Parser p) {
@@ -216,12 +191,11 @@ static inline void init_type_map(USE Parser p) {
         {.tag = TYPE_I16},
         {.tag = TYPE_I32},
         {.tag = TYPE_I64},
-        {.tag = TYPE_POINTER, .ptr = {NULL, ALIGN_DYNAMIC}},
+        {.tag = TYPE_POINTER, .pointee_type = NULL},
     };
 
     for (int i = 0; i < 5; i++) {
-        UCLType *v =
-            group_alloc(p->allocs, sizeof(UCLType *), alignof(UCLType *));
+        UCLType *v = group_alloc(p->ag, sizeof(UCLType), alignof(UCLType));
         memcpy(v, &TYPES[i], sizeof(UCLType));
         ht_set(p->types, KEYS[i], v);
     }
@@ -231,17 +205,22 @@ static inline void init_type_map(USE Parser p) {
 Parser parser(String source) {
     Parser p = checked_malloc(sizeof(struct parser));
 
-    p->allocs = group_create();
-    p->idents = new_pool(p->allocs);
-    p->types = ht_create();
+    AllocGroup ag = group_create();
+    StringPool idents = new_pool(ag);
+    HashTable types = ht_create();
+    Scanner scanner = start_scanner(source, idents);
 
-    p->scanner = start_scanner(source, p->idents);
-
-    p->ntokens = 0;
-    p->token_cap = 0;
-    p->next_tok_i = 0;
+    // default initialization rules initialize all unspecified fields if
+    // designated initializer syntax is used
+    *p = (struct parser){
+        .ag = ag,
+        .idents = idents,
+        .types = types,
+        .scanner = scanner,
+    };
 
     init_type_map(p);
+
     return p;
 }
 
@@ -287,45 +266,48 @@ static Token consume(USE Parser p, enum token_type ty, const char *msg) {
     error_at(p, 1, msg);
 }
 
-static void free_type(UCLType *t) {
-    switch (t->tag) {
-        case TYPE_POINTER:
-            if (t->ptr.pointee_type) free_type(t->ptr.pointee_type);
-            break;
-        case TYPE_ARRAY:
-            if (t->array.member_type) free_type(t->array.member_type);
-            break;
-        default: break;
-    }
-    free(t);
-}
+extern inline String as_string(CharBuffer b);
 
 static UCLType *read_type(USE Parser p) {
     Token tok;
     UCLType *type = NULL;
+    CharBuffer name_buf = (CharBuffer){0, 0, NULL};
+    bool new_alloc = false;
     switch ((tok = advance(p)).type) {
-        case TOKEN_I8: return ht_lookup(p->types, (String){2, "i8"});
-        case TOKEN_I16: return ht_lookup(p->types, (String){3, "i16"});
-        case TOKEN_I32: return ht_lookup(p->types, (String){3, "i32"});
-        case TOKEN_I64: return ht_lookup(p->types, (String){3, "i64"});
+        case TOKEN_I8: type = ht_lookup(p->types, (String){2, "i8"}); break;
+        case TOKEN_I16: type = ht_lookup(p->types, (String){3, "i16"}); break;
+        case TOKEN_I32: type = ht_lookup(p->types, (String){3, "i32"}); break;
+        case TOKEN_I64: type = ht_lookup(p->types, (String){3, "i64"}); break;
+        case TOKEN_DEREF:
         case TOKEN_MUL: {
-            if (peek(p).type == TOKEN_DYNAMIC) {
-                return ht_lookup(p->types, (String){8, "*dynamic"});
+            if (advance_on(p, TOKEN_DYNAMIC)) {
+                type = ht_lookup(p->types, (String){8, "*dynamic"});
+            } else {
+                new_alloc = true;
+                type = checked_malloc(sizeof(UCLType));
+                type->tag = TYPE_POINTER;
+                type->pointee_type = read_type(p);
             }
-            type = checked_malloc(sizeof(UCLType));
-            *type = (UCLType){
-                .tag = TYPE_POINTER,
-                .ptr = (struct ucl_pointer){
-                    .pointee_type = read_type(p), .alignment = 0
-                }
-            };
             break;
         }
         default: error_at(p, 0, "Expected type");
     }
 
-    while (peek(p).type == TOKEN_L_SQUARE) {
-        advance(p);
+    write_type(type, &name_buf);
+
+    UCLType *cached = ht_lookup(p->types, as_string(name_buf));
+
+    if (cached) {
+        if (new_alloc) {
+            free(type);
+            new_alloc = false;
+        }
+        type = cached;
+    } else {
+        group_claim(p->ag, type);
+    }
+
+    while (advance_on(p, TOKEN_L_SQUARE)) {
         switch ((tok = advance(p)).type) {
             case TOKEN_INT_BIN:
             case TOKEN_INT_OCT:
@@ -339,28 +321,44 @@ static UCLType *read_type(USE Parser p) {
                 type = arr;
                 break;
             default:
-                free(type);
-                if (tok.type >= TOKEN_INT_BIN && tok.type <= TOKEN_INT_HEX_64) {
-                    error_at(p, 0, "Array size can't have a size suffix");
+                if (new_alloc) {
+                    free(type);
+                    new_alloc = false;
                 }
-                error_at(p, 0, "Array size must be numeric literal");
+
+                if (tok.type >= TOKEN_INT_BIN && tok.type <= TOKEN_INT_HEX_64) {
+                    if ((tok.type - TOKEN_INT_BIN) % 5) {
+                        error_at(p, 0, "Array size can't have a size suffix");
+                    }
+                } else {
+                    error_at(p, 0, "Array size must be numeric literal");
+                }
         }
+
         if (!advance_on(p, TOKEN_R_SQUARE)) {
-            free_type(type);
-            error_at(p, 0, "Expect ']' after arrat size.");
+            free(type);
+            error_at(p, 0, "Expect ']' after array size.");
+        }
+
+        char suf_buf[MAX_SIZE_DIGITS + 3] = {};
+        size_t sz = sprintf(suf_buf, "[%zu]", type->array.len);
+        append_chars(&name_buf, sz, (uchar *)suf_buf);
+        UCLType *existing = ht_lookup(p->types, as_string(name_buf));
+        if (existing) {
+            free(type);
+            type = existing;
         }
     }
 
-    CharBuffer _buf = (CharBuffer){0, 0, NULL};
-    write_type(type, &_buf);
-    String name = (String){_buf.size, (char *)_buf.mem};
-    UCLType *existing = ht_lookup(p->types, name);
-    if (existing) {
-        free_type(type);
-        free(_buf.mem);
-        return existing;
+    cached = ht_lookup(p->types, as_string(name_buf));
+    if (cached) {
+        free(type);
+        free(name_buf.mem);
+        type = cached;
+    } else {
+        ht_set(p->types, as_string(name_buf), type);
     }
-    ht_set(p->types, name, type);
+
     return type;
 }
 
@@ -396,20 +394,19 @@ static UCLType *_Nonnull array_of(
     size_t sz = sprintf(numbuf, "[%zu]", len);
     append_chars(&name, sz, (uchar *)numbuf);
     String key = (String){name.size, (char *)name.mem};
-    UCLType *t = ht_lookup(p->types, key);
-    if (t) {
-    } else {
-        t = ALLOCATE(p, UCLType);
-        t->tag = TYPE_ARRAY;
-        t->array.len = len;
-        t->array.member_type = mem_type;
-        ht_set(p->types, key, t);
+    UCLType *type = ht_lookup(p->types, key);
+    if (!type) {
+        type = checked_malloc(sizeof(UCLType));
+        type->tag = TYPE_ARRAY;
+        type->array.len = len;
+        type->array.member_type = mem_type;
+        ht_set(p->types, key, type);
     }
     free(name.mem);
-    return t;
+    return type;
 }
 
-static UCLExpression *_Nonnull array(USE Parser p, bool assignable) {
+static UCLExpression *_Nonnull array(USE Parser p, bool) {
     size_t array_start = p->next_tok_i;
     if (peek(p).type == TOKEN_R_SQUARE) {
         error_at(p, 0, "Empty arrays are not supported");
@@ -431,7 +428,7 @@ static UCLExpression *_Nonnull array(USE Parser p, bool assignable) {
     }
     p->next_tok_i = array_start;
 
-    struct array_definition *array = tracked_allocate(
+    struct array_definition *array = tracked_alloc(
         p, sizeof(struct array_definition) + sizeof(UCLExpression *[array_size])
     );
     array->size = array_size;
@@ -448,16 +445,12 @@ static UCLExpression *_Nonnull array(USE Parser p, bool assignable) {
 
     UCLExpression *expr = ALLOCATE(p, UCLExpression);
     expr->tag = XPR_ARRAY;
+    expr->line = p->tokens[array_start].line;
     expr->array = array;
     expr->type = array_of(p, array_size, array->type);
     return expr;
 }
 
-#if CHAR_MIN < 0
-#define CHAR_FIELD s
-#else
-#define CHAR_FIELD u
-#endif
 static ucl_i8 parse_char(const char *_Nonnull *const _Nonnull chr) {
     static_assert(UINT8_MAX == UCHAR_MAX);
     if (**chr == '\\') {
@@ -483,35 +476,17 @@ static ucl_i8 parse_char(const char *_Nonnull *const _Nonnull chr) {
         }
     }
 
-    return (ucl_i8){.CHAR_FIELD = *(*chr)++};
-}
-
-#undef CHAR_FIELD
-
-static bool is_assignment(TokenType ty) {
-    switch (ty) {
-        case TOKEN_PLUS_ASSIGN:
-        case TOKEN_MINUS_ASSIGN:
-        case TOKEN_MUL_ASSIGN:
-        case TOKEN_DIV_ASSIGN:
-        case TOKEN_MOD_ASSIGN:
-        case TOKEN_SIGNED_MUL_ASSIGN:
-        case TOKEN_SIGNED_DIV_ASSIGN:
-        case TOKEN_SIGNED_MOD_ASSIGN:
-        case TOKEN_BIT_AND_ASSIGN:
-        case TOKEN_BIT_OR_ASSIGN:
-        case TOKEN_BIT_XOR_ASSIGN:
-        case TOKEN_SHR_LOG_ASSIGN:
-        case TOKEN_SHR_ARITH_ASSIGN:
-        case TOKEN_SHL_ASSIGN:
-        case TOKEN_ASSIGN: return true;
-        default: return false;
-    }
+#if CHAR_MIN < 0
+    return (ucl_i8){.s = *(*chr)++};
+#else
+    return (ucl_i8){.u = *(*chr)++};
+#endif
 }
 
 static UCLExpression *_Nonnull literal(USE Parser p, bool) {
     UCLExpression *expr = ALLOCATE(p, UCLExpression);
     expr->tag = XPR_LITERAL;
+    expr->line = current(p).line;
     TokenType ty;
     switch (ty = advance(p).type) {
         case TOKEN_CHAR: {
@@ -559,43 +534,28 @@ static UCLExpression *_Nonnull literal(USE Parser p, bool) {
 }
 
 static UCLExpression *_Nonnull grouping(USE Parser p, bool) {
+    size_t line = current(p).line;
     UCLExpression *grouped = expression(p);
     consume(p, TOKEN_R_PAREN, "Expected ')' after parenthesized expression");
     UCLExpression *expr = ALLOCATE(p, UCLExpression);
     expr->tag = XPR_GROUP;
+    expr->line = line;
     expr->grouped = grouped;
     return expr;
 }
 
-static UCLExpression *_Nonnull ident(USE Parser p, bool assignable) {
+static UCLExpression *_Nonnull ident(USE Parser p, bool) {
     Token tok = current(p);
-    UCLExpression *e = ALLOCATE(p, UCLExpression);
+    UCLExpression *e = checked_malloc(sizeof(UCLExpression));
     e->tag = XPR_VAR;
     e->var_name = intern(p->idents, tok.lexeme);
     e->type = type_of_binding(p, &p->current_vars, e->var_name);
-    if (assignable && is_assignment(peek(p).type)) {
-        p->next_tok_i++;
-        UCLExpression *val = expression(p);
-        UCLExpression *outer = ALLOCATE(p, UCLExpression);
-        outer->tag = XPR_ASSIGN;
-    }
+
     return e;
 }
 
-static bool is_numeric(UCLType *_Nonnull t) {
-    switch (t->tag) {
-        case TYPE_POINTER:
-        case TYPE_OPAQUE:
-        case TYPE_ARRAY: return false;
-        case TYPE_I8:
-        case TYPE_I16:
-        case TYPE_I32:
-        case TYPE_I64: return true;
-    }
-}
-
 static UCLExpression *_Nonnull index_(
-    USE Parser p, bool assignable, UCLExpression *_Nonnull expr
+    USE Parser p, bool, UCLExpression *_Nonnull expr
 ) {
     do {
         if (expr->type->tag != TYPE_ARRAY) {
@@ -605,6 +565,7 @@ static UCLExpression *_Nonnull index_(
         size_t saved_i = p->next_tok_i;
         new_expr->type = expr->type->array.member_type;
         new_expr->tag = XPR_INDEX;
+        new_expr->line = current(p).line;
         new_expr->index.array = expr;
         new_expr->index.index = expression(p);
         UCLExpression *index = expression(p);
@@ -618,9 +579,10 @@ static UCLExpression *_Nonnull index_(
     return expr;
 }
 
-static UCLExpression *_Nonnull unary(USE Parser p, bool assignable) {
+static UCLExpression *_Nonnull unary(USE Parser p, bool) {
     UCLExpression *expr = ALLOCATE(p, UCLExpression);
     expr->tag = XPR_UNARY;
+    expr->line = current(p).line;
     expr->unary.op = current(p).type;
     expr->unary.operand = subexpr(p, XPREC_UNARY);
     return expr;
@@ -629,6 +591,7 @@ static UCLExpression *_Nonnull unary(USE Parser p, bool assignable) {
 static UCLExpression *_Nonnull typecast(USE Parser p, bool) {
     UCLExpression *expr = ALLOCATE(p, UCLExpression);
     expr->tag = XPR_TYPECAST;
+    expr->line = current(p).line;
     expr->type = read_type(p);
     consume(p, TOKEN_R_CURLY, "Expect '}' after cast type");
     expr->type_cast.inner = subexpr(p, XPREC_UNARY);
@@ -638,132 +601,136 @@ static UCLExpression *_Nonnull typecast(USE Parser p, bool) {
 static UCLExpression *_Nonnull call(
     USE Parser p, bool, UCLExpression *_Nonnull e
 ) {
-    (void)e;
-    (void)p;
-    __builtin_trap();
+    TODO(e, p);
 }
 
 static UCLExpression *_Nonnull binary(
     USE Parser p, bool, UCLExpression *_Nonnull e
 ) {
-    (void)e;
-    (void)p;
-    __builtin_trap();
+    TODO(e, p);
 }
 
 static UCLExpression *_Nonnull assign(
     USE Parser p, bool, UCLExpression *_Nonnull e
 ) {
-    (void)e;
-    (void)p;
-    __builtin_trap();
+    TODO(e, p);
 }
 
-static UCLExpression *_Nonnull bitcast(USE Parser p, bool) {
-    (void)p;
-    __builtin_trap();
+static UCLExpression *_Nonnull compound(
+    USE Parser p, bool, UCLExpression *_Nonnull e
+) {
+    TODO(e, p);
 }
 
 // clang-format off
 
 // Pratt parsing rule table
 static const ParseRule EXPR_RULES[TOKEN_EOF + 1] = {
-    [TOKEN_L_SQUARE]            = {array,       index_,  XPREC_CALL},
-    [TOKEN_L_PAREN]             = {grouping,    call,   XPREC_CALL},
-    [TOKEN_PLUS]                = {NULL,        binary, XPREC_TERM},
-    [TOKEN_MINUS]               = {unary,       binary, XPREC_TERM},
-    [TOKEN_MUL]                 = {unary,       binary, XPREC_FACTOR},
-    [TOKEN_DIV]                 = {NULL,        binary, XPREC_FACTOR},
-    [TOKEN_MOD]                 = {NULL,        binary, XPREC_FACTOR},
-    [TOKEN_SIGNED_MUL]          = {NULL,        binary, XPREC_FACTOR},
-    [TOKEN_SIGNED_DIV]          = {NULL,        binary, XPREC_FACTOR},
-    [TOKEN_SIGNED_MOD]          = {NULL,        binary, XPREC_FACTOR},
-    [TOKEN_PLUS_ASSIGN]         = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_MINUS_ASSIGN]        = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_MUL_ASSIGN]          = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_DIV_ASSIGN]          = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_MOD_ASSIGN]          = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_SIGNED_MUL_ASSIGN]   = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_SIGNED_DIV_ASSIGN]   = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_SIGNED_MOD_ASSIGN]   = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_EQ]                  = {NULL,        binary, XPREC_ORDER},
-    [TOKEN_NE]                  = {NULL,        binary, XPREC_ORDER},
-    [TOKEN_LT]                  = {NULL,        binary, XPREC_ORDER},
-    [TOKEN_GT]                  = {NULL,        binary, XPREC_ORDER},
-    [TOKEN_LE]                  = {NULL,        binary, XPREC_ORDER},
-    [TOKEN_GE]                  = {NULL,        binary, XPREC_ORDER},
-    [TOKEN_SIGNED_LT]           = {NULL,        binary, XPREC_ORDER},
-    [TOKEN_SIGNED_GT]           = {NULL,        binary, XPREC_ORDER},
-    [TOKEN_SIGNED_LE]           = {NULL,        binary, XPREC_ORDER},
-    [TOKEN_SIGNED_GE]           = {NULL,        binary, XPREC_ORDER},
-    [TOKEN_DEREF]               = {unary,       NULL,   XPREC_NONE},
-    [TOKEN_REF]                 = {unary,       NULL,   XPREC_NONE},
-    [TOKEN_LOGICAL_NOT]         = {NULL,        binary, XPREC_LOGIC},
-    [TOKEN_LOGICAL_AND]         = {NULL,        binary, XPREC_LOGIC},
-    [TOKEN_LOGICAL_OR]          = {NULL,        binary, XPREC_LOGIC},
-    [TOKEN_BIT_NOT]             = {NULL,        binary, XPREC_BMASK},
-    [TOKEN_BIT_AND]             = {NULL,        binary, XPREC_BMASK},
-    [TOKEN_BIT_OR]              = {NULL,        binary, XPREC_BMASK},
-    [TOKEN_BIT_XOR]             = {NULL,        binary, XPREC_BMASK},
-    [TOKEN_BIT_AND_ASSIGN]      = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_BIT_OR_ASSIGN]       = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_BIT_XOR_ASSIGN]      = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_SHR_LOG]             = {NULL,        binary, XPREC_BSHIFT},
-    [TOKEN_SHR_ARITH]           = {NULL,        binary, XPREC_BSHIFT},
-    [TOKEN_SHL]                 = {NULL,        binary, XPREC_BSHIFT},
-    [TOKEN_SHR_LOG_ASSIGN]      = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_SHR_ARITH_ASSIGN]    = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_SHL_ASSIGN]          = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_ASSIGN]              = {NULL,        assign, XPREC_ASSIGN},
-    [TOKEN_UNSIGNED_BITCAST_8]  = {bitcast,     NULL,   XPREC_NONE},
-    [TOKEN_UNSIGNED_BITCAST_16] = {bitcast,     NULL,   XPREC_NONE},
-    [TOKEN_UNSIGNED_BITCAST_32] = {bitcast,     NULL,   XPREC_NONE},
-    [TOKEN_UNSIGNED_BITCAST_64] = {bitcast,     NULL,   XPREC_NONE},
-    [TOKEN_SIGNED_BITCAST_8]    = {bitcast,     NULL,   XPREC_NONE},
-    [TOKEN_SIGNED_BITCAST_16]   = {bitcast,     NULL,   XPREC_NONE},
-    [TOKEN_SIGNED_BITCAST_32]   = {bitcast,     NULL,   XPREC_NONE},
-    [TOKEN_SIGNED_BITCAST_64]   = {bitcast,     NULL,   XPREC_NONE},
-    [TOKEN_TYPE_CAST]           = {typecast,    NULL,   XPREC_NONE},
-    [TOKEN_OPAQUE_8]            = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_OPAQUE_16]           = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_OPAQUE_32]           = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_OPAQUE_64]           = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_WHILE]               = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_STR]                 = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_CHAR]                = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_DEC]             = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_DEC_8]           = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_DEC_16]          = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_DEC_32]          = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_DEC_64]          = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_BIN]             = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_BIN_8]           = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_BIN_16]          = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_BIN_32]          = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_BIN_64]          = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_OCT]             = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_OCT_8]           = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_OCT_16]          = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_OCT_32]          = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_OCT_64]          = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_HEX]             = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_HEX_8]           = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_HEX_16]          = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_HEX_32]          = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_INT_HEX_64]          = {literal,     NULL,   XPREC_NONE},
-    [TOKEN_IDENT]               = {ident,       NULL,   XPREC_NONE},
+    [TOKEN_L_SQUARE]            = {array,       index_,    XPREC_CALL},
+    [TOKEN_L_PAREN]             = {grouping,    call,      XPREC_CALL},
+    [TOKEN_PLUS]                = {NULL,        binary,    XPREC_TERM},
+    [TOKEN_MINUS]               = {unary,       binary,    XPREC_TERM},
+    [TOKEN_MUL]                 = {unary,       binary,    XPREC_FACTOR},
+    [TOKEN_DIV]                 = {NULL,        binary,    XPREC_FACTOR},
+    [TOKEN_MOD]                 = {NULL,        binary,    XPREC_FACTOR},
+    [TOKEN_SIGNED_MUL]          = {NULL,        binary,    XPREC_FACTOR},
+    [TOKEN_SIGNED_DIV]          = {NULL,        binary,    XPREC_FACTOR},
+    [TOKEN_SIGNED_MOD]          = {NULL,        binary,    XPREC_FACTOR},
+    [TOKEN_PLUS_ASSIGN]         = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_MINUS_ASSIGN]        = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_MUL_ASSIGN]          = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_DIV_ASSIGN]          = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_MOD_ASSIGN]          = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_SIGNED_MUL_ASSIGN]   = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_SIGNED_DIV_ASSIGN]   = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_SIGNED_MOD_ASSIGN]   = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_EQ]                  = {NULL,        binary,    XPREC_ORDER},
+    [TOKEN_NE]                  = {NULL,        binary,    XPREC_ORDER},
+    [TOKEN_LT]                  = {NULL,        binary,    XPREC_ORDER},
+    [TOKEN_GT]                  = {NULL,        binary,    XPREC_ORDER},
+    [TOKEN_LE]                  = {NULL,        binary,    XPREC_ORDER},
+    [TOKEN_GE]                  = {NULL,        binary,    XPREC_ORDER},
+    [TOKEN_SIGNED_LT]           = {NULL,        binary,    XPREC_ORDER},
+    [TOKEN_SIGNED_GT]           = {NULL,        binary,    XPREC_ORDER},
+    [TOKEN_SIGNED_LE]           = {NULL,        binary,    XPREC_ORDER},
+    [TOKEN_SIGNED_GE]           = {NULL,        binary,    XPREC_ORDER},
+    [TOKEN_DEREF]               = {unary,       NULL,      XPREC_NONE},
+    [TOKEN_REF]                 = {unary,       NULL,      XPREC_NONE},
+    [TOKEN_LOGICAL_NOT]         = {unary,       NULL,      XPREC_NONE},
+    [TOKEN_LOGICAL_AND]         = {NULL,        binary,    XPREC_LOGIC},
+    [TOKEN_LOGICAL_OR]          = {NULL,        binary,    XPREC_LOGIC},
+    [TOKEN_BIT_NOT]             = {NULL,        binary,    XPREC_BMASK},
+    [TOKEN_BIT_AND]             = {unary,       binary,    XPREC_BMASK},
+    [TOKEN_BIT_OR]              = {NULL,        binary,    XPREC_BMASK},
+    [TOKEN_BIT_XOR]             = {NULL,        binary,    XPREC_BMASK},
+    [TOKEN_BIT_AND_ASSIGN]      = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_BIT_OR_ASSIGN]       = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_BIT_XOR_ASSIGN]      = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_SHR_LOG]             = {NULL,        binary,    XPREC_BSHIFT},
+    [TOKEN_SHR_ARITH]           = {NULL,        binary,    XPREC_BSHIFT},
+    [TOKEN_SHL]                 = {NULL,        binary,    XPREC_BSHIFT},
+    [TOKEN_SHR_LOG_ASSIGN]      = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_SHR_ARITH_ASSIGN]    = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_SHL_ASSIGN]          = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_ASSIGN]              = {NULL,        assign,    XPREC_ASSIGN},
+    [TOKEN_UNSIGNED_BITCAST_8]  = {unary,       NULL,      XPREC_NONE},
+    [TOKEN_UNSIGNED_BITCAST_16] = {unary,       NULL,      XPREC_NONE},
+    [TOKEN_UNSIGNED_BITCAST_32] = {unary,       NULL,      XPREC_NONE},
+    [TOKEN_UNSIGNED_BITCAST_64] = {unary,       NULL,      XPREC_NONE},
+    [TOKEN_SIGNED_BITCAST_8]    = {unary,       NULL,      XPREC_NONE},
+    [TOKEN_SIGNED_BITCAST_16]   = {unary,       NULL,      XPREC_NONE},
+    [TOKEN_SIGNED_BITCAST_32]   = {unary,       NULL,      XPREC_NONE},
+    [TOKEN_SIGNED_BITCAST_64]   = {unary,       NULL,      XPREC_NONE},
+    [TOKEN_TYPE_CAST]           = {typecast,    NULL,      XPREC_NONE},
+    [TOKEN_OPAQUE_8]            = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_OPAQUE_16]           = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_OPAQUE_32]           = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_OPAQUE_64]           = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_WHILE]               = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_STR]                 = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_CHAR]                = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_DEC]             = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_DEC_8]           = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_DEC_16]          = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_DEC_32]          = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_DEC_64]          = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_BIN]             = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_BIN_8]           = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_BIN_16]          = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_BIN_32]          = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_BIN_64]          = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_OCT]             = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_OCT_8]           = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_OCT_16]          = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_OCT_32]          = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_OCT_64]          = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_HEX]             = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_HEX_8]           = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_HEX_16]          = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_HEX_32]          = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_INT_HEX_64]          = {literal,     NULL,      XPREC_NONE},
+    [TOKEN_IDENT]               = {ident,       NULL,      XPREC_NONE},
 };
 // clang-format on
 
 static UCLExpression *subexpr(USE Parser p, enum expr_prec prec) {
     PrefixFn pref;
-    if (!(pref = EXPR_RULES[advance(p).type].prefix)) {}
-    __builtin_trap();
+    if (!(pref = EXPR_RULES[advance(p).type].prefix)) {
+        error_at(p, 0, "Expect expression.");
+    }
+
+    bool assignable = prec <= XPREC_ASSIGN;
+    UCLExpression *a = pref(p, assignable);
+
+    while (prec <= EXPR_RULES[current(p).type].precedence) {
+        InfixFn infix = EXPR_RULES[advance(p).type].infix;
+        a = infix(p, assignable, a);
+    }
+    return a;
 }
 
 static UCLExpression *expression(USE Parser p) {
-    (void)p;
-    __builtin_trap();
+    TODO(p);
 }
 
 [[gnu::cold]]
@@ -774,7 +741,7 @@ static int ident_printf_len(const String *s) {
 
 static Statement var_decl(USE Parser p, Placement plcmnt) {
     size_t start = p->next_tok_i - 1;
-    Statement stmt = {.tag = STMT_VAR_DEC};
+    Statement stmt = {.tag = STMT_VAR_DEC, .line = p->tokens[start].line};
     stmt.declaration.ident = intern(
         p->idents, consume(p, TOKEN_IDENT, "Expect variable name").lexeme
     );
@@ -818,59 +785,61 @@ static Statement var_decl(USE Parser p, Placement plcmnt) {
 }
 
 static Statement block_stmt(USE Parser p) {
-    (void)p;
-    __builtin_trap();
+    TODO(p);
 }
 
 static Statement cond_stmt(USE Parser p) {
-    (void)p;
-    __builtin_trap();
+    TODO(p);
 }
 
 static Statement expr_stmt(USE Parser p) {
-    (void)p;
-    __builtin_trap();
+    TODO(p);
 }
 
 static Statement while_stmt(USE Parser p) {
-    (void)p;
-    __builtin_trap();
+    TODO(p);
 }
 
 static Statement foreach_stmt(USE Parser p) {
-    (void)p;
-    __builtin_trap();
+    TODO(p);
 }
 
-const bool IS_ASSIGNMENT[TOKEN_EOF + 1] = {
-    [TOKEN_ASSIGN] = true,
-    [TOKEN_PLUS_ASSIGN] = true,
-    [TOKEN_MINUS_ASSIGN] = true,
-    [TOKEN_MUL_ASSIGN] = true,
-    [TOKEN_DIV_ASSIGN] = true,
-    [TOKEN_MOD_ASSIGN] = true,
-    [TOKEN_SIGNED_MUL_ASSIGN] = true,
-    [TOKEN_SIGNED_DIV_ASSIGN] = true,
-    [TOKEN_SIGNED_MOD_ASSIGN] = true,
-    [TOKEN_BIT_AND_ASSIGN] = true,
-    [TOKEN_BIT_OR_ASSIGN] = true,
-    [TOKEN_BIT_XOR_ASSIGN] = true,
-    [TOKEN_SHR_LOG_ASSIGN] = true,
-    [TOKEN_SHR_ARITH_ASSIGN] = true,
-    [TOKEN_SHL_ASSIGN] = true,
-};
-
 Statement get_statement(USE Parser p) {
-    if (setjmp(p->errbuf)) return (Statement){.tag = STMT_UNPARSABLE};
+    volatile size_t ba_ct = p->build_allocs.count;
+    if (setjmp(p->errbuf)) [[clang::unlikely]] {
+        // if an error occured, free all allocations that occured since then
+        for (size_t i = ba_ct; i < p->build_allocs.count; i++) {
+            free(p->build_allocs.ptrs[i]);
+        }
+        return (Statement){.tag = STMT_UNPARSABLE, .line = p->ntokens ? p->tokens[0].line : 0};
+    }
     Token t;
+    Statement s = (Statement){.tag = STMT_UNPARSABLE, .line = p->ntokens ? p->tokens[0].line : 0};
 
     switch ((t = advance(p)).type) {
-        case TOKEN_LET: return var_decl(p, STORE_STACK);
-        case TOKEN_STATIC: return var_decl(p, STORE_STATIC);
-        case TOKEN_IF: return cond_stmt(p);
-        case TOKEN_L_CURLY: return block_stmt(p);
-        case TOKEN_WHILE: return while_stmt(p);
-        case TOKEN_FOREACH: return foreach_stmt(p);
-        default: return expr_stmt(p);
+        case TOKEN_LET: s = var_decl(p, STORE_STACK); break;
+        case TOKEN_STATIC: s = var_decl(p, STORE_STATIC); break;
+        case TOKEN_IF: s = cond_stmt(p); break;
+        case TOKEN_L_CURLY: s = block_stmt(p); break;
+        case TOKEN_WHILE: s = while_stmt(p); break;
+        case TOKEN_FOREACH: s = foreach_stmt(p); break;
+        default: s = expr_stmt(p); break;
     }
+
+    p->build_allocs.count = ba_ct;
+
+    return s;
+}
+
+void free_parser([[clang::release_handle("parser")]] Parser p) {
+    for (size_t i = 0; i < p->build_allocs.count; i++) {
+        free(p->build_allocs.ptrs[i]);
+    }
+    free_scanner(p->scanner);
+    free_pool(p->idents);
+    ht_cleanup(p->types, NULL);
+
+    group_free(p->ag);
+
+    free(p);
 }

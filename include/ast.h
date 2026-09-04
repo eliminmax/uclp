@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+ * SPDX-FileCopyrightText: 2025 - 2026 Eli Array Minkoff
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
@@ -16,41 +16,23 @@
 // the destination of an assignment
 struct place {
     TU_ENUM(tag, uint8_t, PLACE_VAR, PLACE_PTR, PLACE_ARR_MEM);
-
-    UCLType *_Nonnull type;
-
     union {
         String var_ident;
         struct expression *_Nonnull ptr;
 
         struct array_member {
             struct expression *_Nonnull array;
-            size_t offset;
+            struct expression *_Nonnull offset;
         } arr_mem;
     };
 };
 
 typedef enum : uint8_t { STORE_STACK, STORE_STATIC } Placement;
 
-struct conditional {
-    struct expression *_Nonnull cond;
-    struct block *_Nonnull if_body;
-
-    struct elif_block {
-        struct expression *_Nonnull cond;
-        struct block *_Nonnull body;
-        struct elif_block *_Nullable next;
-    } *_Nullable elif_block;
-
-    struct block *_Nullable else_body;
-};
-
 typedef struct expression {
     TU_ENUM(
         tag,
         uint8_t,
-        // identifiers starting with "E" followed by a number or another
-        // upprecase letter are reserved for system errors
         XPR_LITERAL,
         XPR_VAR,
         XPR_UNARY,
@@ -68,6 +50,12 @@ typedef struct expression {
             TokenType op;
             struct expression *_Nonnull operand;
         } unary;
+
+        struct assignment {
+            TokenType op;
+            struct place *_Nonnull place;
+            struct expression *_Nonnull value;
+        } assign;
 
         struct binary_expression {
             TokenType op;
@@ -102,7 +90,8 @@ typedef struct expression {
 
     };
 
-    UCLType *_Nonnull type;
+    UCLType *_Nullable type;
+    size_t line [[clang::require_explicit_initialization]];
 } UCLExpression;
 
 struct array_definition {
@@ -121,6 +110,7 @@ typedef struct statement {
     TU_ENUM(
         tag,
         uint8_t,
+        STMT_UNPARSABLE,
         STMT_BLOCK,
         STMT_IF,
         STMT_WHILE,
@@ -134,25 +124,22 @@ typedef struct statement {
         STMT_EXTERN_FUN,
         STMT_SYSCALL,
         STMT_END,
-        STMT_UNPARSABLE,
     );
 
     union {
         struct {
             String *_Nonnull ident;
             struct expression *_Nullable value;
-
             Placement placement;
         } declaration;
 
-        struct {
-            struct place *_Nonnull assign_dest;
-            struct expression *_Nonnull assign_expr;
-        };
-
         struct block *_Nonnull block;
 
-        struct conditional *_Nonnull conditional;
+        struct {
+            struct expression *_Nonnull cond;
+            struct statement *_Nonnull if_body;
+            struct statement *_Nullable else_body;
+        } conditional;
 
         struct {
             struct expression *_Nonnull cond;
@@ -166,14 +153,15 @@ typedef struct statement {
         } foreach_loop;
 
         struct expression *_Nonnull expr;
+        struct function_decl *_Nonnull fun_dec;
     };
+    size_t line [[clang::require_explicit_initialization]];
 } Statement;
 
 // A sequence of expressions within their own scope;
 struct block {
-    size_t body_size;
-    Statement *_Nonnull statements [[clang::counted_by(body_size)]];
-    UCLType *_Nullable return_type;
+    size_t size;
+    Statement *_Nonnull statements [[clang::counted_by(size)]];
 };
 
 struct function_call {
@@ -189,13 +177,11 @@ struct function_arg {
 
 // A function declaration
 struct function_decl {
-    TU_ENUM(tag, uint8_t, FUNC_INTERNAL, FUNC_DYNAMIC);
+    TU_ENUM(tag, uint8_t, FUNC_DEF, FUNC_INTERNAL, FUNC_DYNAMIC);
     String name;
     uint8_t nargs;
-
     union {
-        struct block internal;
-
+        struct block body;
         struct {
             String *_Nonnull symbol;
             String *_Nonnull dlopen_name;
@@ -203,45 +189,5 @@ struct function_decl {
     };
     struct function_arg *_Nonnull args [[clang::counted_by(nargs)]];
 };
-
-struct top_level_statement {
-    union {
-        struct function_decl function_decl;
-        struct statement statement;
-    };
-
-    enum : bool {
-        TOP_LVL_FUNC_DECL,
-        TOP_LVL_STATEMENT,
-    } tag [[clang::require_explicit_initialization]];
-};
-
-typedef struct ast {
-    size_t len;
-    struct top_level_statement *_Nonnull root [[clang::counted_by(len)]];
-} Ast;
-
-#include "mem/arena.h"
-#include "token.h"
-
-typedef enum [[clang::enum_extensibility(open)]] {
-    AST_BUILD_SUCCESS,
-    AST_BUILD_UNEXPECTED_EOF,
-    AST_BUILD_UNIMPLEMENTED,
-} AstBuildErr;
-
-// either the root of the Abstract Syntax Tree, or the first token that failed
-// to be parsed
-union build_ast_result {
-    Ast ast;
-
-    Token err_token;
-};
-
-AstBuildErr build_ast(
-    struct token_sequence seq,
-    AllocGroup ag,
-    union build_ast_result *_Nonnull result
-);
 
 #endif /* UCLP_AST */

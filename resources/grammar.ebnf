@@ -65,8 +65,11 @@ TYPE = (integral type | pointer type | array type | opaque type), sp ;
 (***************)
 
 EXPR = assignment, sp ;
-assignment = { "=", sp }, logical and or ;
-assignable = (identifier | deref | index), sp ;
+assign target = { "*", sp }, identifier, sp, { ("[", sp, EXPR, "]", sp) | params } ;
+assign op = ["<<" | "|" | "&" | "^" | "+" | "-" | ( ["$"], (">>" | "*" | "/" | "%"))], "=" ;
+assignment = { assign target, ("=", sp }, logical and or ;
+
+compound assign op = (bit shift | bitwise | sum | product), "=";
 
 logical and or = arith cmp, { ("||" | "&&"), sp, arith cmp } ;
 arith cmp = bit shift, { 
@@ -76,9 +79,9 @@ bit shift = bitwise, { sp, (">>" | "<<" | "$>>"), sp, bitwise } ;
 bitwise = sum, { sp, ("|" | "&" | "^"), sp, sum } ;
 sum = product, { sp, ("+" | "-"), sp, product } ;
 product = unary, { sp, ["$"], ("*" | "/" | "%"), sp, unary } ;
-unary = { "!" | "~" | "-" | "&" | "*" | (["$"], ":[", unit size, "]") },
+unary = { "!" | "~" | "-" | "&" | "*" | (["$"], ":[", unit size, "]") | (":{", sp, TYPE, "}") },
         sp, index ;
-index = atom, { "[", sp, EXPR, "]" } ;
+index = atom, { ("[", sp, EXPR, "]", sp) | params } ;
 
 atom = (literal
        | (identifier, [ sp, "(", sp, [ EXPR, { ",", sp, EXPR } ], ")" ])
@@ -117,11 +120,6 @@ return = "return", sp, [ EXPR ], ";" ;
 break = "break", sp, [ identifier, sp ], ";" ;
 
 expr stmt = EXPR, ";" ;
-
-
-assign op = [ bit shift | bitwise | sum | product ], "=", sp;
-
-assignment = identifier, sp, { "[", sp, EXPR "]", sp }, assign op, sp EXPR ;
 
 STMT = (block
          | if | while | foreach | return | expr stmt | break

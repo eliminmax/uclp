@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
+#include <stdarg.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -86,14 +87,27 @@ read_error:
     exit(2);
 }
 
+[[noreturn]] [[gnu::cold]] [[gnu::format(__printf__, 2, 5)]]
+void report_ice(const char *name, const char *fmt, const char *file, int line, ...) {
+    fprintf(stderr, "INTERNAL COMPILER ERROR: %s (%s:%d)\n", name, file, line);
+    va_list ap;
+    va_start(ap, line);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fputc('\n', stderr);
+    fflush(NULL);
+    abort();
+}
+
 static void debug_print_token(Token TOK) {
 #define DEBUG_TOKENS
 #include "include/lang/tokens.h"
 }
 
 int main(int argc, char *argv[]) {
+    AllocGroup ag = group_create();
     if (argc < 2) {
-        StringPool idents = new_pool();
+        StringPool idents = new_pool(ag);
         char *line = NULL;
         size_t len = 0;
         ssize_t sz;
@@ -110,15 +124,17 @@ int main(int argc, char *argv[]) {
         if (errno) {
             perror("Failed to read input");
             free_pool(idents);
+            group_free(ag);
             free(line);
             return 1;
         }
         free_pool(idents);
+        group_free(ag);
         free(line);
         return 0;
     } else if (argc == 2) {
         bool had_error = false;
-        StringPool idents = new_pool();
+        StringPool idents = new_pool(ag);
         String source = read_source(argv[1]);
         Scanner scanner = start_scanner(source, idents);
         Token t;
@@ -132,6 +148,7 @@ int main(int argc, char *argv[]) {
         free_scanner(scanner);
         free(source.text);
         free_pool(idents);
+        group_free(ag);
         return had_error;
     }
 }

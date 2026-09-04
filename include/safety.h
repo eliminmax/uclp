@@ -8,6 +8,14 @@
 #define UCLP_SAFETY_H
 
 #include <assert.h> // IWYU pragma: export
+#include <stdlib.h> // IWYU pragma: keep
+#include <stdio.h> // IWYU pragma: keep
+
+[[noreturn]] [[gnu::cold]] [[gnu::format(__printf__, 2, 5)]]
+void report_ice(const char *name, const char *fmt, const char *file, int line, ...);
+
+#define ICE(name, fmt, ...) report_ice(name, fmt, __FILE__, __LINE__ __VA_OPT__(,) __VA_ARGS__)
+
 
 #ifdef NDEBUG
 #ifndef __has_builtin
@@ -25,7 +33,6 @@
 
 #include <stdio.h>  // IWYU pragma: keep
 #include <stdlib.h> // IWYU pragma: keep
-
 // An alternative to `assert` with more information provided
 //
 // If NDEBUG is defined, it tries to hint to the compiler to optimize based on

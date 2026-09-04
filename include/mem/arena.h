@@ -29,4 +29,13 @@ void *_Nonnull group_alloc(
     size_t alignment
 );
 
+// add *p to the group - the allocation will remain in-place, but will be
+// `free`d when `group_free` is called.
+//
+// `p` must remain valid from the time this is called to the time `group_free`
+// is called, and must be freeable with `free`.
+void group_claim(
+    AllocGroup ag [[clang::use_handle("alloc_group")]], void *_Nonnull ptr
+);
+
 #endif /* UCLP_ARENA_H */

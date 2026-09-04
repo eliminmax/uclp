@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+ * SPDX-FileCopyrightText: 2025 - 2026 Eli Array Minkoff
  *
  * SPDX-License-Identifier: GPL-3.0-only
  *
@@ -54,9 +54,9 @@ typedef enum Alignment {
 } Alignment;
 
 // A struct which represents a pointer to the underlying type
-struct ucl_pointer {
+struct [[deprecated]] ucl_pointer {
     struct ucl_type *_Nullable pointee_type;
-
+    [[deprecated]]
     Alignment alignment;
 };
 
@@ -73,25 +73,32 @@ struct ucl_array {
     size_t len;
 };
 
+struct ucl_functype {
+    struct ucl_type *_Nullable return_type;
+    uint8_t nargs;
+    struct ucl_type [[clang::counted_by(nargs)]] *_Nonnull arg_types[];
+};
+
 // A tagged union representing a type
 typedef struct ucl_type {
     enum ucl_type_tag : uint8_t {
+        TYPE_UNINHABITED,
         TYPE_POINTER,
         TYPE_OPAQUE,
         TYPE_I8,
         TYPE_I16,
         TYPE_I32,
         TYPE_I64,
-        TYPE_ARRAY
+        TYPE_ARRAY,
+        TYPE_FUNCTION,
     } tag;
 
     union {
-        struct ucl_pointer ptr;
+        struct ucl_type *pointee_type;
         struct ucl_opaque_type opaque;
         struct ucl_array array;
+        struct ucl_functype *func;
     };
 } UCLType;
-
-Alignment ucl_alignof(UCLType *_Nonnull type); 
 
 #endif /* UCLP_TYPES_H */

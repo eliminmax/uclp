@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <uchar.h>
 
-#include "typenames.h"
+#include "../typenames.h"
 
 typedef struct {
     size_t capacity;
