@@ -120,112 +120,6 @@ static bool advance_on(char chr, USE Scanner s) {
     return false;
 }
 
-#define LITERAL(lit) ((String){.len = sizeof(lit) - 1, .text = lit})
-#define DYNAMIC ((String){0, NULL})
-// clang-format off
-
-// Static Token lexemes to avoid too many small allocations
-//
-// If set to {0, NULL}, then it should be set dynamically.
-//
-// Definitions are orderered by common prefixes, with shorter strings after
-// longer ones, to make it easier to follow when implementing the token matching
-// logic.
-static const String LITERALS[TOKEN_EOF + 1] = {
-    [TOKEN_NE]                    = LITERAL("!="),
-    [TOKEN_STR]                   = DYNAMIC,
-    [TOKEN_LOGICAL_NOT]           = LITERAL("!"),
-    [TOKEN_POUND_SIGN]            = LITERAL("#"),
-    [TOKEN_SIGNED_MOD_ASSIGN]     = LITERAL("$%="),
-    [TOKEN_SIGNED_MOD]            = LITERAL("$%"),
-    [TOKEN_SIGNED_MUL_ASSIGN]     = LITERAL("$*="),
-    [TOKEN_SIGNED_MUL]            = LITERAL("$*"),
-    [TOKEN_SIGNED_DIV_ASSIGN]     = LITERAL("$/="),
-    [TOKEN_SIGNED_DIV]            = LITERAL("$/"),
-    [TOKEN_SIGNED_BITCAST_8]      = LITERAL("$:[8]"),
-    [TOKEN_SIGNED_BITCAST_16]     = LITERAL("$:[16]"),
-    [TOKEN_SIGNED_BITCAST_32]     = LITERAL("$:[32]"),
-    [TOKEN_SIGNED_BITCAST_64]     = LITERAL("$:[64]"),
-    [TOKEN_SIGNED_LE]             = LITERAL("$<="),
-    [TOKEN_SIGNED_LT]             = LITERAL("$<"),
-    [TOKEN_SIGNED_GE]             = LITERAL("$>="),
-    [TOKEN_SHR_ARITH_ASSIGN]      = LITERAL("$>>="),
-    [TOKEN_SHR_ARITH]             = LITERAL("$>>"),
-    [TOKEN_SIGNED_GT]             = LITERAL("$>"),
-    [TOKEN_MOD_ASSIGN]            = LITERAL("%="),
-    [TOKEN_MOD]                   = LITERAL("%"),
-    [TOKEN_LOGICAL_AND]           = LITERAL("&&"),
-    [TOKEN_BIT_AND_ASSIGN]        = LITERAL("&="),
-    [TOKEN_BIT_AND]               = LITERAL("&"),
-    [TOKEN_CHAR]                  = DYNAMIC,
-    [TOKEN_L_PAREN]               = LITERAL("("),
-    [TOKEN_R_PAREN]               = LITERAL(")"),
-    [TOKEN_MUL_ASSIGN]            = LITERAL("*="),
-    [TOKEN_MUL]                   = LITERAL("*"),
-    [TOKEN_PLUS_ASSIGN]           = LITERAL("+="),
-    [TOKEN_PLUS]                  = LITERAL("+"),
-    [TOKEN_COMMA]                 = LITERAL(","),
-    [TOKEN_MINUS_ASSIGN]          = LITERAL("-="),
-    [TOKEN_ARROW]                 = LITERAL("->"),
-    [TOKEN_MINUS]                 = LITERAL("-"),
-    [TOKEN_REF]                   = LITERAL(".&"),
-    [TOKEN_DEREF]                 = LITERAL(".*"),
-    [TOKEN_DOT]                   = LITERAL("."),
-    [TOKEN_DIV_ASSIGN]            = LITERAL("/="),
-    [TOKEN_DIV]                   = LITERAL("/"),
-    [TOKEN_UNSIGNED_BITCAST_8]    = LITERAL(":[8]"),
-    [TOKEN_UNSIGNED_BITCAST_16]   = LITERAL(":[16]"),
-    [TOKEN_UNSIGNED_BITCAST_32]   = LITERAL(":[32]"),
-    [TOKEN_UNSIGNED_BITCAST_64]   = LITERAL(":[64]"),
-    [TOKEN_TYPE_CAST]             = LITERAL(":{"),
-    [TOKEN_COLON]                 = LITERAL(":"),
-    [TOKEN_SEMICOLON]             = LITERAL(";"),
-    [TOKEN_SHL_ASSIGN]            = LITERAL("<<="),
-    [TOKEN_SHL]                   = LITERAL("<<"),
-    [TOKEN_LE]                    = LITERAL("<="),
-    [TOKEN_LT]                    = LITERAL("<"),
-    [TOKEN_EQ]                    = LITERAL("=="),
-    [TOKEN_ASSIGN]                = LITERAL("="),
-    [TOKEN_GE]                    = LITERAL(">="),
-    [TOKEN_SHR_LOG_ASSIGN]        = LITERAL(">>="),
-    [TOKEN_SHR_LOG]               = LITERAL(">>"),
-    [TOKEN_GT]                    = LITERAL(">"),
-    [TOKEN_L_SQUARE]              = LITERAL("["),
-    [TOKEN_R_SQUARE]              = LITERAL("]"),
-    [TOKEN_BIT_XOR_ASSIGN]        = LITERAL("^="),
-    [TOKEN_BIT_XOR]               = LITERAL("^"),
-    [TOKEN_L_CURLY]               = LITERAL("{"),
-    [TOKEN_BIT_OR_ASSIGN]         = LITERAL("|="),
-    [TOKEN_LOGICAL_OR]            = LITERAL("||"),
-    [TOKEN_BIT_OR]                = LITERAL("|"),
-    [TOKEN_R_CURLY]               = LITERAL("}"),
-    // keywords last
-    [TOKEN_BREAK]                 = LITERAL("break"),
-    [TOKEN_DYNAMIC]               = LITERAL("dynamic"),
-    [TOKEN_ELSE]                  = LITERAL("else"),
-    [TOKEN_FOREACH]               = LITERAL("foreach"),
-    [TOKEN_FUNC]                  = LITERAL("func"),
-    [TOKEN_I16]                   = LITERAL("i16"),
-    [TOKEN_I32]                   = LITERAL("i32"),
-    [TOKEN_I64]                   = LITERAL("i64"),
-    [TOKEN_I8]                    = LITERAL("i8"),
-    [TOKEN_IF]                    = LITERAL("if"),
-    [TOKEN_IN]                    = LITERAL("in"),
-    [TOKEN_LET]                   = LITERAL("let"),
-    [TOKEN_OPAQUE_8]              = DYNAMIC,
-    [TOKEN_OPAQUE_16]             = DYNAMIC,
-    [TOKEN_OPAQUE_32]             = DYNAMIC,
-    [TOKEN_OPAQUE_64]             = DYNAMIC,
-    [TOKEN_STATIC]                = LITERAL("static"),
-    [TOKEN_WHILE]                 = LITERAL("while"),
-    [TOKEN_EOF]                   = LITERAL(""),
-    // leave the rest as {0, NULL}
-    [TOKEN_INT_BIN ... TOKEN_UNPARSEABLE] = DYNAMIC,
-};
-// clang-format on
-#undef DYNAMIC
-#undef LITERAL
-
 static void skip_block_comment(USE Scanner s) {
     for (int chr = advance(s); chr != -1; chr = advance(s)) {
         if (chr == '*' && advance_on('/', s)) return;
@@ -263,12 +157,7 @@ static void skip_whitespace(USE Scanner s) {
 
 static String get_lexeme(USE Scanner s) {
     ptrdiff_t len = s->head - s->start;
-    char *text = NULL;
-    if (len) {
-        void *_Nonnull mem = checked_malloc(len);
-        text = memcpy(mem, s->start, len);
-    }
-    return (String){.len = len, .text = text};
+    return (String){.len = len, .text = (char *)s->start};
 }
 
 // Don't use locale-sensitive <ctype.h> functions for checks that should not be
@@ -747,40 +636,24 @@ Token next_token(USE Scanner s) {
             .type = TOKEN_UNPARSEABLE,
             .line = s->line,
             .lexeme = get_lexeme(s),
-            .should_free_text = true,
         };
     }
 
     enum token_type type = next_token_type(s);
 
-    size_t len = s->head - s->start;
+    String lexeme = get_lexeme(s);
 
-    String lexeme = LITERALS[type];
-    bool should_free_text = lexeme.text == NULL;
-
-    if (lexeme.text != NULL) {
-        assert(
-            type == TOKEN_EOF ||
-            (len == lexeme.len && memcmp(lexeme.text, s->start, len) == 0)
-        );
-    } else if (type == TOKEN_IDENT) {
+    if (type == TOKEN_IDENT) {
         String ident = get_lexeme(s);
-        lexeme = *intern(s->ident_pool, ident);
-        free(ident.text);
+        intern(s->ident_pool, ident);
     } else {
-        if (len) {
-            lexeme = get_lexeme(s);
-            should_free_text = true;
-        } else {
-            lexeme = (String){0, NULL};
-        }
+        lexeme = get_lexeme(s);
     }
 
     return (Token){
         .type = type,
         .line = s->line,
         .lexeme = lexeme,
-        .should_free_text = should_free_text,
     };
 }
 

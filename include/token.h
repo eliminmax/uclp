@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+ * SPDX-FileCopyrightText: 2025 - 2026 Eli Array Minkoff
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
@@ -20,17 +20,12 @@ typedef enum token_type : uint8_t {
 
 } TokenType;
 
+// A token of source; `lexeme.text` points into the source code itself.
 typedef struct token {
     String lexeme;
     size_t line;
-
     TokenType type;
-    bool should_free_text;
 } Token;
-
-inline void destroy_token(Token t) {
-    if (t.should_free_text) free(t.lexeme.text);
-}
 
 struct token_sequence tokenize(
     size_t len, AllocGroup ag, const char source[_Nonnull len]

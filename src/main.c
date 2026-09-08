@@ -104,33 +104,55 @@ static void debug_print_token(Token TOK) {
 #include "include/lang/tokens.h"
 }
 
+struct line_alloc { char *_Nonnull text; size_t len; struct line_alloc *_Nullable prev; };
+
+struct line_alloc *_Nullable repl_line(struct line_alloc *_Nullable prev) {
+    struct line_alloc *next_line = checked_malloc(sizeof(*next_line));
+    size_t n = 0;
+    next_line->text = NULL;
+    errno = 0;
+    ssize_t ret = getline(&next_line->text, &n, stdin);
+    if (ret < 0) {
+        free(next_line->text);
+        if (errno) [[clang::unlikely]] {
+            perror("Failed to read input");
+            abort();
+        }
+        free(next_line);
+        return NULL;
+    }
+
+    next_line->len = ret;
+    next_line->prev = prev;
+    return next_line;
+}
+
 int main(int argc, char *argv[]) {
     AllocGroup ag = group_create();
+
     if (argc < 2) {
         StringPool idents = new_pool(ag);
-        char *line = NULL;
-        size_t len = 0;
-        ssize_t sz;
-        while ((sz = getline(&line, &len, stdin)) != -1) {
-            len = sz;
-            Scanner scanner = start_scanner((String){len, line}, idents);
+        struct line_alloc *line = NULL;
+        struct line_alloc *new_line;
+        while ((new_line = repl_line(line))) {
+            line = new_line;
+            Scanner scanner = start_scanner((String){line->len, line->text}, idents);
             Token t;
             while ((t = next_token(scanner)).type != TOKEN_EOF) {
                 debug_print_token(t);
-                destroy_token(t);
             }
             free_scanner(scanner);
         }
-        if (errno) {
-            perror("Failed to read input");
-            free_pool(idents);
-            group_free(ag);
+
+        while (line) {
+            struct line_alloc *prev = line->prev;
+            free(line->text);
             free(line);
-            return 1;
+            line = prev;
         }
+
         free_pool(idents);
         group_free(ag);
-        free(line);
         return 0;
     } else if (argc == 2) {
         bool had_error = false;
@@ -141,9 +163,7 @@ int main(int argc, char *argv[]) {
         while ((t = next_token(scanner)).type != TOKEN_EOF) {
             if (t.type == TOKEN_UNPARSEABLE) had_error = true;
             debug_print_token(t);
-            destroy_token(t);
         }
-        assert(t.should_free_text == false);
 
         free_scanner(scanner);
         free(source.text);
@@ -152,8 +172,3 @@ int main(int argc, char *argv[]) {
         return had_error;
     }
 }
-
-// the "home" of the normally-inlined small utility functions defined in
-// various project headers
-
-extern inline void destroy_token(Token);

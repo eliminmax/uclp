@@ -113,6 +113,7 @@ String *intern(StringPool pool, const String s) {
 }
 
 void free_pool(StringPool pool) {
+    free(pool->interned);
     free(pool);
 }
 

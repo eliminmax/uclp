@@ -15,9 +15,8 @@ typedef struct {
 } String;
 
 
-inline String as_string(CharBuffer b) {
+inline String as_string(const CharBuffer b) {
     return (String){.len = b.size, .text = (char *)b.mem};
 }
-
 
 #endif /* SIZED_STRING_H */
