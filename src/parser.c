@@ -22,6 +22,7 @@
 #include "mem/checked.h"
 #include "mem/dynarray.h"
 #include "parser.h"
+#include "printerr.h"
 #include "scanner.h"
 #include "sized_string.h"
 #include "string_manager.h"
@@ -63,7 +64,6 @@ struct parser {
     Token *tokens [[clang::counted_by(ntokens)]];
 };
 
-
 static void *_Nonnull tracked_alloc(USE Parser p, size_t sz) {
     if (p->build_allocs.count == p->build_allocs.cap) {
         p->build_allocs.cap = new_capacity(p->build_allocs.cap);
@@ -76,17 +76,30 @@ static void *_Nonnull tracked_alloc(USE Parser p, size_t sz) {
 
 #define ALLOCATE(p, t) tracked_alloc((p), sizeof(t))
 
+struct error_span {
+    size_t start_line;
+    size_t end_line;
+};
+
 [[gnu::cold, gnu::format(__printf__, 3, 4), noreturn]]
 static void error_at(USE Parser p, ssize_t offset, const char *fmt, ...) {
     REQUIRE(offset >= 0 || (size_t)(-offset) < p->next_tok_i);
-
     Token t = p->tokens[p->next_tok_i - 1 + offset];
+
     if (t.type == TOKEN_UNPARSEABLE) longjmp(p->errbuf, 1);
-    fputs("Error at '", stderr);
-    fwrite(t.lexeme.text, t.lexeme.len, 1, stderr);
     va_list fmt_args;
     va_start(fmt_args, fmt);
-    vfprintf(stderr, fmt, fmt_args);
+
+    String source = get_source(p->scanner);
+    ucl_verror(
+        t.line,
+        (uchar *)source.text,
+        source.len,
+        (uchar *)t.lexeme.text,
+        t.lexeme.len,
+        fmt,
+        fmt_args
+    );
     va_end(fmt_args);
     longjmp(p->errbuf, 1);
 }
@@ -266,7 +279,7 @@ static Token consume(USE Parser p, enum token_type ty, const char *msg) {
     error_at(p, 1, msg);
 }
 
-extern inline String as_string(CharBuffer b);
+extern inline String as_string(CharBuffer);
 
 static UCLType *read_type(USE Parser p) {
     Token tok;
@@ -729,9 +742,7 @@ static UCLExpression *subexpr(USE Parser p, enum expr_prec prec) {
     return a;
 }
 
-static UCLExpression *expression(USE Parser p) {
-    TODO(p);
-}
+static UCLExpression *expression(USE Parser p) { TODO(p); }
 
 [[gnu::cold]]
 static int ident_printf_len(const String *s) {
@@ -784,25 +795,15 @@ static Statement var_decl(USE Parser p, Placement plcmnt) {
     return stmt;
 }
 
-static Statement block_stmt(USE Parser p) {
-    TODO(p);
-}
+static Statement block_stmt(USE Parser p) { TODO(p); }
 
-static Statement cond_stmt(USE Parser p) {
-    TODO(p);
-}
+static Statement cond_stmt(USE Parser p) { TODO(p); }
 
-static Statement expr_stmt(USE Parser p) {
-    TODO(p);
-}
+static Statement expr_stmt(USE Parser p) { TODO(p); }
 
-static Statement while_stmt(USE Parser p) {
-    TODO(p);
-}
+static Statement while_stmt(USE Parser p) { TODO(p); }
 
-static Statement foreach_stmt(USE Parser p) {
-    TODO(p);
-}
+static Statement foreach_stmt(USE Parser p) { TODO(p); }
 
 Statement get_statement(USE Parser p) {
     volatile size_t ba_ct = p->build_allocs.count;
@@ -811,10 +812,14 @@ Statement get_statement(USE Parser p) {
         for (size_t i = ba_ct; i < p->build_allocs.count; i++) {
             free(p->build_allocs.ptrs[i]);
         }
-        return (Statement){.tag = STMT_UNPARSABLE, .line = p->ntokens ? p->tokens[0].line : 0};
+        return (Statement){
+            .tag = STMT_UNPARSABLE, .line = p->ntokens ? p->tokens[0].line : 0
+        };
     }
     Token t;
-    Statement s = (Statement){.tag = STMT_UNPARSABLE, .line = p->ntokens ? p->tokens[0].line : 0};
+    Statement s = (Statement){
+        .tag = STMT_UNPARSABLE, .line = p->ntokens ? p->tokens[0].line : 0
+    };
 
     switch ((t = advance(p)).type) {
         case TOKEN_LET: s = var_decl(p, STORE_STACK); break;

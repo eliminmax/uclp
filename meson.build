@@ -18,7 +18,7 @@ incdir = include_directories('include')
 mem_handlers = ['src/mem/arena.c', 'src/mem/checked.c', 'src/mem/dynarray.c']
 all_sources = [
   'src/main.c', 'src/hash.c', 'src/table.c', 'src/string_manager.c',
-  'src/colorize.c', 'src/scanner.c', mem_handlers
+  'src/colorize.c', 'src/scanner.c', mem_handlers, 'src/printerr.c'
 ]
 
 executable('ucf_loader',

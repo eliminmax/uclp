@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
+#include "typenames.h"
 #include "string_manager.h"
 #include "token.h"
 
@@ -16,7 +17,5 @@ Scanner start_scanner(
 Token next_token([[clang::use_handle("scanner")]] Scanner);
 void free_scanner([[clang::release_handle("scanner")]] Scanner);
 
-[[gnu::cold, gnu::format(__printf__, 2, 3), noreturn]]
-void scan_error(
-    [[clang::use_handle("scanner")]] Scanner s, const char *_Nonnull fmt, ...
-);
+const uchar *_Nonnull get_position([[clang::use_handle("scanner")]] Scanner s);
+String get_source([[clang::use_handle("scanner")]] Scanner s);

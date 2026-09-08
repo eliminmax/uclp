@@ -3,8 +3,6 @@
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
-#include "scanner.h"
-
 #include <ctype.h>
 #include <setjmp.h>
 #include <stdarg.h>
@@ -13,9 +11,10 @@
 #include <string.h>
 
 #include "annotations.h"
-#include "colorize.h"
 #include "mem/checked.h"
+#include "printerr.h"
 #include "safety.h"
+#include "scanner.h"
 #include "token.h"
 
 #define MAX_ERR_TOKEN_SIZE 0x1000
@@ -24,11 +23,11 @@
 
 struct scanner {
     size_t source_size;
-    uchar *source [[clang::counted_by(source_size)]];
-    uchar *start;
-    uchar *head;
-    uchar *line_start;
-    uchar NODEREF *end;
+    const uchar *source [[clang::counted_by(source_size)]];
+    const uchar *start;
+    const uchar *head;
+    const uchar *line_start;
+    const uchar NODEREF *end;
     size_t line;
     jmp_buf jump_buf;
     StringPool ident_pool;
@@ -48,44 +47,31 @@ Scanner start_scanner(
 }
 
 [[gnu::cold, gnu::format(__printf__, 2, 3), noreturn]]
-void scan_error(USE Scanner s, const char *_Nonnull fmt, ...) {
+static void scan_error(USE Scanner s, const char *_Nonnull fmt, ...) {
     REQUIRE(s->start < s->end);
-    REQUIRE(*s->start < 0x80);
-
-    uchar *line_end = s->head;
-
-    static const char *ERR_HL, *HL_END;
-    // bold; red; underlined
-    if (!ERR_HL) ERR_HL = select_color(stderr, "\x1b[1;31;4m");
-    if (!HL_END) HL_END = select_color(stderr, "\x1b[m");
-
-    while (line_end < s->end && *line_end != '\n') line_end++;
-
-    ptrdiff_t prefix_len = s->start - s->line_start;
-    ptrdiff_t token_len = s->head - s->start;
-    ptrdiff_t suffix_len = line_end - s->head;
-
     va_list fmt_args;
     va_start(fmt_args, fmt);
-    if (*ERR_HL) fputs(ERR_HL, stderr);
-    vfprintf(stderr, fmt, fmt_args);
-    if (*HL_END) fputs(HL_END, stderr);
+
+    ucl_verror(
+        s->line,
+        s->source,
+        s->source_size,
+        s->start,
+        s->end - s->start,
+        fmt,
+        fmt_args
+    );
     va_end(fmt_args);
 
-    if (token_len > MAX_ERR_TOKEN_SIZE || prefix_len > MAX_ERR_TOKEN_SIZE ||
-        suffix_len > MAX_ERR_TOKEN_SIZE) {
-        fprintf(stderr, "  (line %zu)", s->line);
-        longjmp(s->jump_buf, 1);
-    }
-
-    fprintf(stderr, "  (line %zu):\n", s->line);
-    // dim italics
-    write_color(s->line_start, stderr, prefix_len, "2;3");
-    // bold black on yellow
-    write_color(s->start, stderr, token_len, "1;43;30");
-    write_color(s->head, stderr, suffix_len, "2;3");
-    fputc('\n', stderr);
     longjmp(s->jump_buf, 1);
+}
+
+const uchar *_Nonnull get_position([[clang::use_handle("scanner")]] Scanner s) {
+    return s->head;
+}
+
+String get_source([[clang::use_handle("scanner")]] Scanner s) {
+    return (String){.len = s->source_size, .text = (char*)s->source };
 }
 
 static int peek(USE Scanner s) {
@@ -232,7 +218,7 @@ static void scan_escape_char(
 ) {
     int chr;
     int next;
-    uchar *esc_start = s->head;
+    const uchar *esc_start = s->head;
     switch (chr = advance(s)) {
         case -1: goto eof;
         case '\n': scan_error(s, "End of file in %s literal", literal_type);
