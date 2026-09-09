@@ -29,15 +29,15 @@ void ucl_verror(
     const uchar *line_end = start + span_size;
 
     while (line_start > source && line_start[-1] != '\n') line_start--;
-    while (line_end < source_end && *line_end != '\n') line_end++;
+    while (line_end < source_end && line_end[1] != '\n') line_end++;
 
     static const char *ERR_HL, *HL_END;
     // bold; red; underlined
     if (!ERR_HL) ERR_HL = select_color(stderr, "\x1b[1;31;4m");
-    if (!HL_END) HL_END = select_color(stderr, "\x1b[m");
+    if (!HL_END) HL_END = select_color(stderr, "\x1b[0m");
 
     ptrdiff_t prefix_len = start - line_start;
-    ptrdiff_t suffix_len = line_end - &start[span_size];
+    ptrdiff_t suffix_len = line_end - &start[span_size] - 1;
 
     if (*ERR_HL) fputs(ERR_HL, stderr);
     vfprintf(stderr, fmt, fmt_args);
@@ -54,6 +54,7 @@ void ucl_verror(
     write_color(line_start, stderr, prefix_len, "2;3");
     // bold black on yellow
     write_color(start, stderr, span_size, "1;43;30");
+    // dim italics again
     write_color(&start[span_size], stderr, suffix_len, "2;3");
     fputc('\n', stderr);
 }
