@@ -27,7 +27,7 @@ static const char *select_color_real(FILE *, const char *code) { return code; }
 static void write_color_ignore(
     const uchar *text, FILE *out, int len, const char *
 ) {
-    fprintf(out, "%.*sm", len, text);
+    fprintf(out, "%.*s", len, text);
 }
 
 static const char *select_color_ignore(FILE *, const char *) { return ""; }
