@@ -35,10 +35,8 @@
 // Approximation of ditigs in SIZE_MAX; see https://stackoverflow.com/a/43788824
 constexpr size_t MAX_SIZE_DIGITS = ((sizeof(size_t) * CHAR_BIT) * 28 / 93 + 2);
 
-typedef UCLExpression *_Nonnull (*PrefixFn)(USE Parser, bool assignable);
-typedef UCLExpression *_Nonnull (*InfixFn)(
-    USE Parser, bool assignable, UCLExpression *_Nonnull
-);
+typedef UCLExpression *_Nonnull (*PrefixFn)(USE Parser);
+typedef UCLExpression *_Nonnull (*InfixFn)(USE Parser, UCLExpression *_Nonnull);
 
 struct var_scope {
     struct var_scope *_Nullable outer;
@@ -419,7 +417,7 @@ static UCLType *_Nonnull array_of(
     return type;
 }
 
-static UCLExpression *_Nonnull array(USE Parser p, bool) {
+static UCLExpression *_Nonnull array(USE Parser p) {
     size_t array_start = p->next_tok_i;
     if (peek(p).type == TOKEN_R_SQUARE) {
         error_at(p, 0, "Empty arrays are not supported");
@@ -496,7 +494,7 @@ static ucl_i8 parse_char(const char *_Nonnull *const _Nonnull chr) {
 #endif
 }
 
-static UCLExpression *_Nonnull literal(USE Parser p, bool) {
+static UCLExpression *_Nonnull literal(USE Parser p) {
     UCLExpression *expr = ALLOCATE(p, UCLExpression);
     expr->tag = XPR_LITERAL;
     expr->line = current(p).line;
@@ -546,8 +544,8 @@ static UCLExpression *_Nonnull literal(USE Parser p, bool) {
     }
 }
 
-static UCLExpression *_Nonnull grouping(USE Parser p, bool) {
-    size_t line = current(p).line;
+static UCLExpression *_Nonnull grouping(USE Parser p) {
+    size_t start = p->next_tok_i - 1;
     UCLExpression *grouped = expression(p);
     consume(p, TOKEN_R_PAREN, "Expected ')' after parenthesized expression");
     UCLExpression *expr = ALLOCATE(p, UCLExpression);
@@ -557,7 +555,7 @@ static UCLExpression *_Nonnull grouping(USE Parser p, bool) {
     return expr;
 }
 
-static UCLExpression *_Nonnull ident(USE Parser p, bool) {
+static UCLExpression *_Nonnull ident(USE Parser p) {
     Token tok = current(p);
     UCLExpression *e = checked_malloc(sizeof(UCLExpression));
     e->tag = XPR_VAR;
@@ -568,7 +566,7 @@ static UCLExpression *_Nonnull ident(USE Parser p, bool) {
 }
 
 static UCLExpression *_Nonnull index_(
-    USE Parser p, bool, UCLExpression *_Nonnull expr
+    USE Parser p, UCLExpression *_Nonnull expr
 ) {
     do {
         if (expr->type->tag != TYPE_ARRAY) {
@@ -592,7 +590,7 @@ static UCLExpression *_Nonnull index_(
     return expr;
 }
 
-static UCLExpression *_Nonnull unary(USE Parser p, bool) {
+static UCLExpression *_Nonnull unary(USE Parser p) {
     UCLExpression *expr = ALLOCATE(p, UCLExpression);
     expr->tag = XPR_UNARY;
     expr->line = current(p).line;
@@ -601,7 +599,7 @@ static UCLExpression *_Nonnull unary(USE Parser p, bool) {
     return expr;
 }
 
-static UCLExpression *_Nonnull typecast(USE Parser p, bool) {
+static UCLExpression *_Nonnull typecast(USE Parser p) {
     UCLExpression *expr = ALLOCATE(p, UCLExpression);
     expr->tag = XPR_TYPECAST;
     expr->line = current(p).line;
@@ -612,19 +610,18 @@ static UCLExpression *_Nonnull typecast(USE Parser p, bool) {
 }
 
 static UCLExpression *_Nonnull call(
-    USE Parser p, bool, UCLExpression *_Nonnull e
+    USE Parser p, UCLExpression *_Nonnull e
 ) {
     TODO(e, p);
 }
 
 static UCLExpression *_Nonnull binary(
-    USE Parser p, bool, UCLExpression *_Nonnull e
+    USE Parser p, UCLExpression *_Nonnull e
 ) {
-    TODO(e, p);
 }
 
 static UCLExpression *_Nonnull assign(
-    USE Parser p, bool, UCLExpression *_Nonnull e
+    USE Parser p, UCLExpression *_Nonnull e
 ) {
     TODO(e, p);
 }
@@ -649,14 +646,14 @@ static const ParseRule EXPR_RULES[TOKEN_EOF + 1] = {
     [TOKEN_SIGNED_MUL]          = {NULL,        binary,    XPREC_FACTOR},
     [TOKEN_SIGNED_DIV]          = {NULL,        binary,    XPREC_FACTOR},
     [TOKEN_SIGNED_MOD]          = {NULL,        binary,    XPREC_FACTOR},
-    [TOKEN_PLUS_ASSIGN]         = {NULL,        compound,  XPREC_ASSIGN},
-    [TOKEN_MINUS_ASSIGN]        = {NULL,        compound,  XPREC_ASSIGN},
-    [TOKEN_MUL_ASSIGN]          = {NULL,        compound,  XPREC_ASSIGN},
-    [TOKEN_DIV_ASSIGN]          = {NULL,        compound,  XPREC_ASSIGN},
-    [TOKEN_MOD_ASSIGN]          = {NULL,        compound,  XPREC_ASSIGN},
-    [TOKEN_SIGNED_MUL_ASSIGN]   = {NULL,        compound,  XPREC_ASSIGN},
-    [TOKEN_SIGNED_DIV_ASSIGN]   = {NULL,        compound,  XPREC_ASSIGN},
-    [TOKEN_SIGNED_MOD_ASSIGN]   = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_PLUS_ASSIGN]         = {NULL,        assign,    XPREC_ASSIGN},
+    [TOKEN_MINUS_ASSIGN]        = {NULL,        assign,    XPREC_ASSIGN},
+    [TOKEN_MUL_ASSIGN]          = {NULL,        assign,    XPREC_ASSIGN},
+    [TOKEN_DIV_ASSIGN]          = {NULL,        assign,    XPREC_ASSIGN},
+    [TOKEN_MOD_ASSIGN]          = {NULL,        assign,    XPREC_ASSIGN},
+    [TOKEN_SIGNED_MUL_ASSIGN]   = {NULL,        assign,    XPREC_ASSIGN},
+    [TOKEN_SIGNED_DIV_ASSIGN]   = {NULL,        assign,    XPREC_ASSIGN},
+    [TOKEN_SIGNED_MOD_ASSIGN]   = {NULL,        assign,    XPREC_ASSIGN},
     [TOKEN_EQ]                  = {NULL,        binary,    XPREC_ORDER},
     [TOKEN_NE]                  = {NULL,        binary,    XPREC_ORDER},
     [TOKEN_LT]                  = {NULL,        binary,    XPREC_ORDER},
@@ -676,15 +673,15 @@ static const ParseRule EXPR_RULES[TOKEN_EOF + 1] = {
     [TOKEN_BIT_AND]             = {unary,       binary,    XPREC_BMASK},
     [TOKEN_BIT_OR]              = {NULL,        binary,    XPREC_BMASK},
     [TOKEN_BIT_XOR]             = {NULL,        binary,    XPREC_BMASK},
-    [TOKEN_BIT_AND_ASSIGN]      = {NULL,        compound,  XPREC_ASSIGN},
-    [TOKEN_BIT_OR_ASSIGN]       = {NULL,        compound,  XPREC_ASSIGN},
-    [TOKEN_BIT_XOR_ASSIGN]      = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_BIT_AND_ASSIGN]      = {NULL,        assign,    XPREC_ASSIGN},
+    [TOKEN_BIT_OR_ASSIGN]       = {NULL,        assign,    XPREC_ASSIGN},
+    [TOKEN_BIT_XOR_ASSIGN]      = {NULL,        assign,    XPREC_ASSIGN},
     [TOKEN_SHR_LOG]             = {NULL,        binary,    XPREC_BSHIFT},
     [TOKEN_SHR_ARITH]           = {NULL,        binary,    XPREC_BSHIFT},
     [TOKEN_SHL]                 = {NULL,        binary,    XPREC_BSHIFT},
-    [TOKEN_SHR_LOG_ASSIGN]      = {NULL,        compound,  XPREC_ASSIGN},
-    [TOKEN_SHR_ARITH_ASSIGN]    = {NULL,        compound,  XPREC_ASSIGN},
-    [TOKEN_SHL_ASSIGN]          = {NULL,        compound,  XPREC_ASSIGN},
+    [TOKEN_SHR_LOG_ASSIGN]      = {NULL,        assign,    XPREC_ASSIGN},
+    [TOKEN_SHR_ARITH_ASSIGN]    = {NULL,        assign,    XPREC_ASSIGN},
+    [TOKEN_SHL_ASSIGN]          = {NULL,        assign,    XPREC_ASSIGN},
     [TOKEN_ASSIGN]              = {NULL,        assign,    XPREC_ASSIGN},
     [TOKEN_UNSIGNED_BITCAST_8]  = {unary,       NULL,      XPREC_NONE},
     [TOKEN_UNSIGNED_BITCAST_16] = {unary,       NULL,      XPREC_NONE},
@@ -732,12 +729,11 @@ static UCLExpression *subexpr(USE Parser p, enum expr_prec prec) {
         error_at(p, 0, "Expect expression.");
     }
 
-    bool assignable = prec <= XPREC_ASSIGN;
-    UCLExpression *a = pref(p, assignable);
+    UCLExpression *a = pref(p);
 
     while (prec <= EXPR_RULES[current(p).type].precedence) {
         InfixFn infix = EXPR_RULES[advance(p).type].infix;
-        a = infix(p, assignable, a);
+        a = infix(p, a);
     }
     return a;
 }
