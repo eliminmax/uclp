@@ -57,7 +57,7 @@ static void scan_error(USE Scanner s, const char *_Nonnull fmt, ...) {
         s->source,
         s->source_size,
         s->start,
-        s->end - s->start,
+        s->head - s->start,
         fmt,
         fmt_args
     );
@@ -69,7 +69,7 @@ const uchar *_Nonnull get_position([[clang::use_handle("scanner")]] Scanner s) {
 }
 
 String get_source([[clang::use_handle("scanner")]] Scanner s) {
-    return (String){.len = s->source_size, .text = (char*)s->source };
+    return (String){.len = s->source_size, .text = (char *)s->source};
 }
 
 static int peek(USE Scanner s) {
@@ -220,7 +220,7 @@ static ScanOp scan_escape_char(
 ) {
     int chr;
     int next;
-    const uchar *esc_start = s->head;
+    const uchar *esc_start = s->head - 1;
     switch (chr = advance(s)) {
         case -1: goto eof;
         case '\n':
@@ -236,6 +236,7 @@ static ScanOp scan_escape_char(
             for (int i = 0; i < 2; i++) {
                 if ((chr = advance(s)) == -1 || !is_hex_digit(chr)) {
                     if (chr == -1) goto eof;
+                    const uchar *real_start = s->start;
                     s->start = esc_start;
                     scan_error(
                         s,
@@ -243,6 +244,7 @@ static ScanOp scan_escape_char(
                         "'%s'",
                         esc_chr(chr).text
                     );
+                    s->start = real_start;
                     return SCAN_STOP;
                 }
             }
@@ -258,7 +260,7 @@ static ScanOp scan_escape_char(
             if ((next = peek(s)) == -1) goto eof;
 
             if (next < '0' || next > '7') return SCAN_CONT;
-            // advance and fall through to handle possible last digit
+            // advance and fall through to handle possible remaining digits.
             advance(s);
             [[fallthrough]];
         case '4':
