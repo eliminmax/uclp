@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 #include <ctype.h>
-#include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -21,6 +20,8 @@
 
 #define USE [[clang::use_handle("scanner")]]
 
+typedef enum : bool { SCAN_CONT = false, SCAN_STOP = true } ScanOp;
+
 struct scanner {
     size_t source_size;
     const uchar *source [[clang::counted_by(source_size)]];
@@ -29,7 +30,6 @@ struct scanner {
     const uchar *line_start;
     const uchar NODEREF *end;
     size_t line;
-    jmp_buf jump_buf;
     StringPool ident_pool;
 };
 
@@ -46,7 +46,7 @@ Scanner start_scanner(
     return s;
 }
 
-[[gnu::cold, gnu::format(__printf__, 2, 3), noreturn]]
+[[gnu::cold, gnu::format(__printf__, 2, 3)]]
 static void scan_error(USE Scanner s, const char *_Nonnull fmt, ...) {
     REQUIRE(s->start < s->end);
     va_list fmt_args;
@@ -62,8 +62,6 @@ static void scan_error(USE Scanner s, const char *_Nonnull fmt, ...) {
         fmt_args
     );
     va_end(fmt_args);
-
-    longjmp(s->jump_buf, 1);
 }
 
 const uchar *_Nonnull get_position([[clang::use_handle("scanner")]] Scanner s) {
@@ -106,15 +104,17 @@ static bool advance_on(char chr, USE Scanner s) {
     return false;
 }
 
-static void skip_block_comment(USE Scanner s) {
+[[nodiscard]]
+static ScanOp skip_block_comment(USE Scanner s) {
     for (int chr = advance(s); chr != -1; chr = advance(s)) {
-        if (chr == '*' && advance_on('/', s)) return;
+        if (chr == '*' && advance_on('/', s)) return SCAN_CONT;
     }
     scan_error(s, "End of file in block comment");
+    return SCAN_STOP;
 }
 
 // skip past whitespace and commas
-static void skip_whitespace(USE Scanner s) {
+[[nodiscard]] static ScanOp skip_whitespace(USE Scanner s) {
     while (s->head < s->end) {
         switch (*s->head) {
             case '\n':
@@ -130,15 +130,16 @@ static void skip_whitespace(USE Scanner s) {
 
                     break;
                 } else if (advance_on('*', s)) {
-                    skip_block_comment(s);
+                    if (skip_block_comment(s) == SCAN_STOP) return SCAN_STOP;
                     break;
                 } else {
                     s->head--;
-                    return;
+                    return SCAN_CONT;
                 }
-            default: return;
+            default: return SCAN_CONT;
         }
     }
+    return SCAN_CONT;
 }
 
 static String get_lexeme(USE Scanner s) {
@@ -213,7 +214,8 @@ static EscapedChr esc_chr(uchar c) {
     return buf;
 }
 
-static void scan_escape_char(
+[[nodiscard]]
+static ScanOp scan_escape_char(
     const char *literal_type, uchar end, USE Scanner s
 ) {
     int chr;
@@ -221,13 +223,15 @@ static void scan_escape_char(
     const uchar *esc_start = s->head;
     switch (chr = advance(s)) {
         case -1: goto eof;
-        case '\n': scan_error(s, "End of file in %s literal", literal_type);
+        case '\n':
+            scan_error(s, "End of file in %s literal", literal_type);
+            return SCAN_STOP;
         case '\'':
         case '\"':
         case '\\':
         case 'n':
         case 'r':
-        case 't': return;
+        case 't': return SCAN_CONT;
         case 'x':
             for (int i = 0; i < 2; i++) {
                 if ((chr = advance(s)) == -1 || !is_hex_digit(chr)) {
@@ -239,6 +243,7 @@ static void scan_escape_char(
                         "'%s'",
                         esc_chr(chr).text
                     );
+                    return SCAN_STOP;
                 }
             }
         case '0':
@@ -252,7 +257,7 @@ static void scan_escape_char(
             // If EOF, then
             if ((next = peek(s)) == -1) goto eof;
 
-            if (next < '0' || next > '7') return;
+            if (next < '0' || next > '7') return SCAN_CONT;
             // advance and fall through to handle possible last digit
             advance(s);
             [[fallthrough]];
@@ -263,25 +268,34 @@ static void scan_escape_char(
             // advance if the next digit is valid octal
             next = peek(s);
             if (next >= '0' && next <= '7') advance(s);
-            return;
+            return SCAN_CONT;
         default:
+            const uchar *real_start = s->start;
             s->start = esc_start;
             while (s->head < s->end && *s->head != end) advance(s);
             scan_error(s, "Invalid escape sequence: '\\%s'", esc_chr(chr).text);
+            s->start = real_start;
+            return SCAN_STOP;
     }
 eof:
     scan_error(s, "End of file in %s literal", literal_type);
+    return SCAN_STOP;
 }
 
-static void scan_string_literal(USE Scanner s) {
+[[nodiscard]]
+static ScanOp scan_string_literal(USE Scanner s) {
     while (!advance_on('"', s)) {
         switch (peek(s)) {
-            case -1: scan_error(s, "End of file in string literal");
+            case -1:
+                scan_error(s, "End of file in string literal");
+                return SCAN_STOP;
             case '\\':
                 s->head++;
-                scan_escape_char("string", '"', s);
+                if (scan_escape_char("string", '"', s)) return SCAN_STOP;
                 break;
-            case '\n': scan_error(s, "End of line in string literal");
+            case '\n':
+                scan_error(s, "End of line in string literal");
+                return SCAN_STOP;
             case '\"':
                 UNREACHABLE(
                     "advance_on('\"') would have ended the string at loop start"
@@ -289,27 +303,41 @@ static void scan_string_literal(USE Scanner s) {
             default: s->head++;
         }
     }
+    return SCAN_CONT;
 }
 
-static void scan_char_literal(USE Scanner s) {
+[[nodiscard]] static ScanOp scan_char_literal(USE Scanner s) {
     switch (peek(s)) {
-        case -1: scan_error(s, "End of file in character literal");
+        case -1:
+            scan_error(s, "End of file in character literal");
+            return SCAN_STOP;
+
         case '\'':
             s->head++;
             if (advance_on('\'', s)) {
                 scan_error(s, "''' is not a valid character literal");
+                return SCAN_STOP;
             }
             scan_error(s, "Empty character literal");
+            return SCAN_STOP;
+
         case '\\':
             s->head++;
-            scan_escape_char("character", '\'', s);
+            if (scan_escape_char("character", '\'', s) == SCAN_STOP) {
+                advance_on('\'', s);
+                return SCAN_STOP;
+            }
             break;
-        case '\n': scan_error(s, "End of line in character literal");
+        case '\n':
+            scan_error(s, "End of line in character literal");
+            return SCAN_STOP;
         default: s->head++;
     }
     if (!advance_on('\'', s)) {
         scan_error(s, "Missing end of character literal");
+        return SCAN_STOP;
     }
+    return SCAN_CONT;
 }
 
 static enum token_type scan_size(
@@ -327,12 +355,14 @@ static enum token_type scan_size(
     }
     while (is_dec_digit(peek(s))) advance(s);
     scan_error(s, "Invalid %s", kind);
+    return TOKEN_UNPARSEABLE;
 }
 
 static enum token_type scan_bin(USE Scanner s) {
     advance(s);
     if (!is_bin_digit(advance(s))) {
         scan_error(s, "Expect at least 1 digit after prefix");
+        return TOKEN_UNPARSEABLE;
     }
     while (true) {
         if (is_bin_digit(peek(s))) {
@@ -350,6 +380,7 @@ static enum token_type scan_oct(USE Scanner s) {
     advance(s);
     if (!is_oct_digit(advance(s))) {
         scan_error(s, "Expect at least 1 digit after prefix");
+        return TOKEN_UNPARSEABLE;
     }
     while (true) {
         if (is_oct_digit(peek(s))) {
@@ -380,6 +411,7 @@ static enum token_type scan_hex(USE Scanner s) {
     advance(s);
     if (!is_hex_digit(advance(s))) {
         scan_error(s, "Expect at least 1 digit after prefix");
+        return TOKEN_UNPARSEABLE;
     }
     while (true) {
         if (is_hex_digit(peek(s))) {
@@ -407,7 +439,11 @@ static enum token_type scan_numeric(USE Scanner s) {
 
 static enum token_type finish_cast(enum token_type base, USE Scanner s) {
     enum token_type type = scan_size(base, "bit width", s);
-    if (!advance_on(']', s)) scan_error(s, "Missing end of size cast");
+    if (type == TOKEN_UNPARSEABLE) return type;
+    if (!advance_on(']', s)) {
+        scan_error(s, "Missing end of size cast");
+        return TOKEN_UNPARSEABLE;
+    }
     return type;
 }
 
@@ -528,7 +564,7 @@ static enum token_type scan_word(USE Scanner s) {
 // SPDX-SnippetEnd
 
 static enum token_type next_token_type(USE Scanner s) {
-    skip_whitespace(s);
+    if (skip_whitespace(s) == SCAN_STOP) return TOKEN_UNPARSEABLE;
 
     if (s->head == s->end) return TOKEN_EOF;
 
@@ -538,7 +574,9 @@ static enum token_type next_token_type(USE Scanner s) {
         case '!':
             if (advance_on('=', s)) return TOKEN_NE;
             return TOKEN_LOGICAL_NOT;
-        case '"': scan_string_literal(s); return TOKEN_STR;
+        case '"':
+            if (scan_string_literal(s) == SCAN_CONT) return TOKEN_STR;
+            return TOKEN_UNPARSEABLE;
         case '#': return TOKEN_POUND_SIGN;
         case '$': return signed_op(s);
         case '%':
@@ -548,7 +586,9 @@ static enum token_type next_token_type(USE Scanner s) {
             if (advance_on('&', s)) return TOKEN_LOGICAL_AND;
             if (advance_on('=', s)) return TOKEN_BIT_AND_ASSIGN;
             return TOKEN_BIT_AND;
-        case '\'': scan_char_literal(s); return TOKEN_CHAR;
+        case '\'':
+            if (scan_char_literal(s) == SCAN_CONT) return TOKEN_CHAR;
+            return TOKEN_UNPARSEABLE;
         case '(': return TOKEN_L_PAREN;
         case ')': return TOKEN_R_PAREN;
         case '*':
@@ -613,17 +653,11 @@ static enum token_type next_token_type(USE Scanner s) {
             scan_error(
                 s, "Unexpected character: '%s'", esc_chr(s->head[-1]).text
             );
+            return TOKEN_UNPARSEABLE;
     }
 }
 
 Token next_token(USE Scanner s) {
-    if (setjmp(s->jump_buf)) {
-        return (Token){
-            .type = TOKEN_UNPARSEABLE,
-            .line = s->line,
-            .lexeme = get_lexeme(s),
-        };
-    }
 
     enum token_type type = next_token_type(s);
 
