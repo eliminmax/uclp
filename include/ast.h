@@ -13,21 +13,9 @@
 #include "sized_string.h"
 #include "tagged_union.h"
 
-// the destination of an assignment
-struct place {
-    TU_ENUM(tag, uint8_t, PLACE_VAR, PLACE_PTR, PLACE_ARR_MEM);
-    union {
-        String var_ident;
-        struct expression *_Nonnull ptr;
-
-        struct array_member {
-            struct expression *_Nonnull array;
-            struct expression *_Nonnull offset;
-        } arr_mem;
-    };
-};
-
 typedef enum : uint8_t { STORE_STACK, STORE_STATIC } Placement;
+
+typedef struct { size_t start; size_t end; } AstSpan;
 
 typedef struct expression {
     TU_ENUM(
@@ -53,13 +41,14 @@ typedef struct expression {
 
         struct assignment {
             TokenType op;
-            struct place *_Nonnull place;
+            struct expression *_Nonnull place;
             struct expression *_Nonnull value;
         } assign;
 
         struct binary_expression {
             TokenType op;
-            struct expression *_Nonnull operands[2];
+            struct expression *_Nonnull lhs;
+            struct expression *_Nonnull rhs;
         } binary;
 
         struct type_cast {
@@ -91,7 +80,7 @@ typedef struct expression {
     };
 
     UCLType *_Nullable type;
-    size_t line [[clang::require_explicit_initialization]];
+    AstSpan span;
 } UCLExpression;
 
 struct array_definition {
@@ -155,7 +144,7 @@ typedef struct statement {
         struct expression *_Nonnull expr;
         struct function_decl *_Nonnull fun_dec;
     };
-    size_t line [[clang::require_explicit_initialization]];
+    AstSpan span;
 } Statement;
 
 // A sequence of expressions within their own scope;

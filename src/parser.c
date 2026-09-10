@@ -58,7 +58,7 @@ struct parser {
     size_t ntokens;
     size_t token_cap;
     size_t next_tok_i;
-    jmp_buf errbuf;
+    jmp_buf *errbuf;
     Token *tokens [[clang::counted_by(ntokens)]];
 };
 
@@ -74,17 +74,20 @@ static void *_Nonnull tracked_alloc(USE Parser p, size_t sz) {
 
 #define ALLOCATE(p, t) tracked_alloc((p), sizeof(t))
 
-struct error_span {
-    size_t start_line;
-    size_t end_line;
-};
+// helper to allocate new epressions, which explicitly sets the type to NULL
+[[gnu::always_inline, gnu::artificial]] static inline UCLExpression
+    *_Nonnull alloc_expr(USE Parser p) {
+    UCLExpression *expr = ALLOCATE(p, UCLExpression);
+    expr->type = NULL;
+    return expr;
+}
 
 [[gnu::cold, gnu::format(__printf__, 3, 4), noreturn]]
 static void error_at(USE Parser p, ssize_t offset, const char *fmt, ...) {
     REQUIRE(offset >= 0 || (size_t)(-offset) < p->next_tok_i);
     Token t = p->tokens[p->next_tok_i - 1 + offset];
 
-    if (t.type == TOKEN_UNPARSEABLE) longjmp(p->errbuf, 1);
+    if (t.type == TOKEN_UNPARSEABLE) longjmp(*p->errbuf, -1);
     va_list fmt_args;
     va_start(fmt_args, fmt);
 
@@ -99,7 +102,7 @@ static void error_at(USE Parser p, ssize_t offset, const char *fmt, ...) {
         fmt_args
     );
     va_end(fmt_args);
-    longjmp(p->errbuf, 1);
+    longjmp(*p->errbuf, 1);
 }
 
 UCLType *_Nonnull type_of_binding(
@@ -244,7 +247,7 @@ static void load_token(USE Parser p) {
         }
         Token t = p->tokens[++p->ntokens] = next_token(p->scanner);
 
-        if (t.type == TOKEN_UNPARSEABLE) longjmp(p->errbuf, -1);
+        if (t.type == TOKEN_UNPARSEABLE) longjmp(*p->errbuf, -1);
     }
 }
 
@@ -393,7 +396,7 @@ typedef struct {
     enum expr_prec precedence;
 } ParseRule;
 
-static UCLExpression *expression(USE Parser);
+#define expression(p) subexpr(p, XPREC_ASSIGN)
 static UCLExpression *subexpr(USE Parser, enum expr_prec);
 
 static UCLType *_Nonnull array_of(
@@ -454,11 +457,12 @@ static UCLExpression *_Nonnull array(USE Parser p) {
         }
     }
 
-    UCLExpression *expr = ALLOCATE(p, UCLExpression);
+    UCLExpression *expr = alloc_expr(p);
     expr->tag = XPR_ARRAY;
-    expr->line = p->tokens[array_start].line;
     expr->array = array;
     expr->type = array_of(p, array_size, array->type);
+    expr->span.start = array_start - 1;
+    expr->span.end = p->next_tok_i;
     return expr;
 }
 
@@ -495,9 +499,10 @@ static ucl_i8 parse_char(const char *_Nonnull *const _Nonnull chr) {
 }
 
 static UCLExpression *_Nonnull literal(USE Parser p) {
-    UCLExpression *expr = ALLOCATE(p, UCLExpression);
+    UCLExpression *expr = alloc_expr(p);
     expr->tag = XPR_LITERAL;
-    expr->line = current(p).line;
+    expr->span.start = p->next_tok_i - 1;
+    expr->span.end = p->next_tok_i;
     TokenType ty;
     switch (ty = advance(p).type) {
         case TOKEN_CHAR: {
@@ -548,94 +553,139 @@ static UCLExpression *_Nonnull grouping(USE Parser p) {
     size_t start = p->next_tok_i - 1;
     UCLExpression *grouped = expression(p);
     consume(p, TOKEN_R_PAREN, "Expected ')' after parenthesized expression");
-    UCLExpression *expr = ALLOCATE(p, UCLExpression);
+    UCLExpression *expr = alloc_expr(p);
     expr->tag = XPR_GROUP;
-    expr->line = line;
     expr->grouped = grouped;
+    expr->span.start = start;
+    expr->span.end = p->next_tok_i;
     return expr;
 }
 
 static UCLExpression *_Nonnull ident(USE Parser p) {
     Token tok = current(p);
-    UCLExpression *e = checked_malloc(sizeof(UCLExpression));
-    e->tag = XPR_VAR;
-    e->var_name = intern(p->idents, tok.lexeme);
-    e->type = type_of_binding(p, &p->current_vars, e->var_name);
-
-    return e;
-}
-
-static UCLExpression *_Nonnull index_(
-    USE Parser p, UCLExpression *_Nonnull expr
-) {
-    do {
-        if (expr->type->tag != TYPE_ARRAY) {
-            error_at(p, 0, "Cannot index non-array expression");
-        }
-        UCLExpression *new_expr = ALLOCATE(p, UCLExpression);
-        size_t saved_i = p->next_tok_i;
-        new_expr->type = expr->type->array.member_type;
-        new_expr->tag = XPR_INDEX;
-        new_expr->line = current(p).line;
-        new_expr->index.array = expr;
-        new_expr->index.index = expression(p);
-        UCLExpression *index = expression(p);
-        if (!is_numeric(index->type)) {
-            p->next_tok_i = saved_i;
-            error_at(p, 0, "Can't index an array with a non-numeric type");
-        }
-        expr = new_expr;
-    } while (advance_on(p, TOKEN_L_SQUARE));
-
+    UCLExpression *expr = checked_malloc(sizeof(UCLExpression));
+    expr->tag = XPR_VAR;
+    expr->var_name = intern(p->idents, tok.lexeme);
+    expr->type = type_of_binding(p, &p->current_vars, expr->var_name);
+    expr->span.start = p->next_tok_i;
+    expr->span.end = p->next_tok_i + 1;
     return expr;
 }
 
 static UCLExpression *_Nonnull unary(USE Parser p) {
-    UCLExpression *expr = ALLOCATE(p, UCLExpression);
+    size_t start = p->next_tok_i - 1;
+    UCLExpression *expr = alloc_expr(p);
     expr->tag = XPR_UNARY;
-    expr->line = current(p).line;
     expr->unary.op = current(p).type;
     expr->unary.operand = subexpr(p, XPREC_UNARY);
+    expr->span.start = start;
+    expr->span.end = p->next_tok_i;
     return expr;
 }
 
 static UCLExpression *_Nonnull typecast(USE Parser p) {
-    UCLExpression *expr = ALLOCATE(p, UCLExpression);
+    size_t start = p->next_tok_i - 1;
+    UCLExpression *expr = alloc_expr(p);
     expr->tag = XPR_TYPECAST;
-    expr->line = current(p).line;
     expr->type = read_type(p);
     consume(p, TOKEN_R_CURLY, "Expect '}' after cast type");
     expr->type_cast.inner = subexpr(p, XPREC_UNARY);
+    expr->span.start = start;
+    expr->span.end = p->next_tok_i;
     return expr;
+}
+
+static UCLExpression *_Nonnull index_(
+    USE Parser p, UCLExpression *_Nonnull e
+) {
+    do {
+        UCLExpression *new_expr = alloc_expr(p);
+        new_expr->tag = XPR_INDEX;
+        new_expr->index.array = e;
+        new_expr->index.index = expression(p);
+        new_expr->span.start = e->span.start;
+        new_expr->span.end = p->next_tok_i;
+        e = new_expr;
+        consume(p, TOKEN_R_SQUARE, "expect ']' after array index.");
+    } while (advance_on(p, TOKEN_L_SQUARE));
+
+    return e;
 }
 
 static UCLExpression *_Nonnull call(
     USE Parser p, UCLExpression *_Nonnull e
 ) {
-    TODO(e, p);
+    static thread_local UCLExpression *ARGS_BUF[256];
+    do {
+        UCLExpression *new_expr = alloc_expr(p);
+        new_expr->tag = XPR_FUNC_CALL;
+        new_expr->func_call->callee = e;
+        uint8_t nargs = 0;
+        if (!advance_on(p, TOKEN_R_PAREN)) {
+            do {
+                if (nargs == UINT8_MAX)
+                    error_at(p, 0, "Too many arguments - maximum is 255.");
+                ARGS_BUF[nargs++] = expression(p);
+            } while (advance_on(p, TOKEN_COMMA));
+            consume(p, TOKEN_R_PAREN, "Expect ')' after function arguments.");
+        }
+        new_expr->func_call->nargs = nargs;
+        if (nargs) {
+            new_expr->func_call->args = ALLOCATE(p, UCLExpression *[nargs]);
+            memcpy(
+                new_expr->func_call->args,
+                ARGS_BUF,
+                sizeof(UCLExpression *) * nargs
+            );
+        } else {
+            new_expr->func_call->args = NULL;
+        }
+
+        new_expr->span.start = e->span.start;
+        new_expr->span.end = p->next_tok_i;
+        e = new_expr;
+    } while (advance_on(p, TOKEN_L_PAREN));
+
+    return e;
 }
+
+[[gnu::const, gnu::artificial]] static inline ParseRule get_rule(TokenType op);
 
 static UCLExpression *_Nonnull binary(
     USE Parser p, UCLExpression *_Nonnull e
 ) {
+    UCLExpression *new_expr = alloc_expr(p);
+    TokenType op = current(p).type;
+    enum expr_prec prec = get_rule(op).precedence;
+    UCLExpression *rhs = subexpr(p, prec + 1);
+    new_expr->binary.op = op;
+
+    new_expr->binary.lhs = e;
+    new_expr->binary.rhs = rhs;
+    new_expr->span.start = e->span.start;
+    new_expr->span.end = rhs->span.end;
+    return new_expr;
 }
 
 static UCLExpression *_Nonnull assign(
     USE Parser p, UCLExpression *_Nonnull e
 ) {
-    TODO(e, p);
-}
+    UCLExpression *new_expr = alloc_expr(p);
 
-static UCLExpression *_Nonnull compound(
-    USE Parser p, bool, UCLExpression *_Nonnull e
-) {
-    TODO(e, p);
+    new_expr->tag = XPR_ASSIGN;
+    new_expr->assign.op = current(p).type;
+    new_expr->assign.place = e;
+    UCLExpression *_Nonnull value = new_expr->assign.value = expression(p);
+    new_expr->span.start = e->span.start;
+    new_expr->span.end = value->span.end;
+
+    return new_expr;
 }
 
 // clang-format off
 
 // Pratt parsing rule table
-static const ParseRule EXPR_RULES[TOKEN_EOF + 1] = {
+static const ParseRule XPR_RULES[TOKEN_EOF + 1] = {
     [TOKEN_L_SQUARE]            = {array,       index_,    XPREC_CALL},
     [TOKEN_L_PAREN]             = {grouping,    call,      XPREC_CALL},
     [TOKEN_PLUS]                = {NULL,        binary,    XPREC_TERM},
@@ -723,22 +773,31 @@ static const ParseRule EXPR_RULES[TOKEN_EOF + 1] = {
 };
 // clang-format on
 
+[[gnu::const, gnu::artificial]] static inline ParseRule get_rule(TokenType op) {
+    return XPR_RULES[op];
+}
+
+// parse a subexpression using the XPR_RULES Pratt parsing table
 static UCLExpression *subexpr(USE Parser p, enum expr_prec prec) {
+    size_t start = p->next_tok_i - 1;
     PrefixFn pref;
-    if (!(pref = EXPR_RULES[advance(p).type].prefix)) {
+    if (!(pref = XPR_RULES[advance(p).type].prefix)) {
         error_at(p, 0, "Expect expression.");
     }
 
     UCLExpression *a = pref(p);
+    a->span.start = start;
+    a->span.end = p->next_tok_i;
 
-    while (prec <= EXPR_RULES[current(p).type].precedence) {
-        InfixFn infix = EXPR_RULES[advance(p).type].infix;
+    while (prec <= XPR_RULES[current(p).type].precedence) {
+        InfixFn infix = XPR_RULES[advance(p).type].infix;
         a = infix(p, a);
     }
+
+    typeck_expr((TypeckCtx){.ag = p->ag, .types = p->types}, a);
+
     return a;
 }
-
-static UCLExpression *expression(USE Parser p) { TODO(p); }
 
 [[gnu::cold]]
 static int ident_printf_len(const String *s) {
@@ -748,7 +807,8 @@ static int ident_printf_len(const String *s) {
 
 static Statement var_decl(USE Parser p, Placement plcmnt) {
     size_t start = p->next_tok_i - 1;
-    Statement stmt = {.tag = STMT_VAR_DEC, .line = p->tokens[start].line};
+    Statement stmt = {.tag = STMT_VAR_DEC};
+    stmt.span.start = start;
     stmt.declaration.ident = intern(
         p->idents, consume(p, TOKEN_IDENT, "Expect variable name").lexeme
     );
@@ -788,46 +848,123 @@ static Statement var_decl(USE Parser p, Placement plcmnt) {
     }
 
     consume(p, TOKEN_SEMICOLON, "Expect ';' after declaration");
+    stmt.span.end = p->next_tok_i;
     return stmt;
 }
 
-static Statement block_stmt(USE Parser p) { TODO(p); }
+static Statement block_stmt(USE Parser p) {
+    size_t cap = 8;
+    size_t count = 0;
+    size_t alloc_index = p->build_allocs.count;
+    size_t start = p->next_tok_i - 1;
+    tracked_alloc(p, sizeof(Statement[8]));
+#define BODY (p->build_allocs.ptrs[alloc_index])
 
-static Statement cond_stmt(USE Parser p) { TODO(p); }
+    TokenType ty;
 
-static Statement expr_stmt(USE Parser p) { TODO(p); }
+    while ((ty = peek(p).type), ty != TOKEN_R_CURLY && ty != TOKEN_EOF) {
+        if (cap <= count) {
+            BODY = checked_reallocarray(
+                BODY, new_capacity(cap), sizeof(Statement)
+            );
+        }
+
+        ((Statement *)BODY)[count++] = get_statement(p);
+    }
+
+    if (!advance_on(p, TOKEN_R_CURLY)) {
+        error_at(
+            p, 0, "Unclosed block (started on line %zu)", p->tokens[start].line
+        );
+    }
+    struct block *block = ALLOCATE(p, struct block);
+    block->size = count;
+    block->statements = BODY;
+    Statement stmt = {
+        .tag = STMT_BLOCK,
+        .block = block,
+        .span.start = start,
+        .span.end = p->next_tok_i
+    };
+    return stmt;
+#undef BODY
+}
+
+static Statement cond_stmt(USE Parser p) {
+    consume(p, TOKEN_L_PAREN, "Expect '(' after 'if'");
+    UCLExpression *cond = expression(p);
+    consume(p, TOKEN_R_PAREN, "Expect ')' after condition");
+    Statement *body = ALLOCATE(p, Statement);
+    *body = get_statement(p);
+
+    TODO();
+}
+
+static Statement expr_stmt(USE Parser p) {
+    UCLExpression *_Nonnull expr = expression(p);
+    consume(p, TOKEN_SEMICOLON, "Expect ';' after expression statement");
+    Statement stmt = {
+        .tag = STMT_EXPR,
+        .expr = expr,
+        .span.start = expr->span.start,
+        .span.end = p->next_tok_i
+    };
+    return stmt;
+}
 
 static Statement while_stmt(USE Parser p) { TODO(p); }
 
 static Statement foreach_stmt(USE Parser p) { TODO(p); }
 
+[[gnu::cold]]
+static void resync(USE Parser p) {
+    while (current(p).type != TOKEN_EOF) {
+        switch (current(p).type) {
+            case TOKEN_SEMICOLON: advance(p); return;
+            case TOKEN_LET:
+            case TOKEN_STATIC:
+            case TOKEN_FOREACH:
+            case TOKEN_IF:
+            case TOKEN_WHILE:
+            case TOKEN_RETURN: return;
+            case TOKEN_EOF: UNREACHABLE("explicit check");
+            default: advance(p);
+        }
+    }
+}
+
 Statement get_statement(USE Parser p) {
-    volatile size_t ba_ct = p->build_allocs.count;
-    if (setjmp(p->errbuf)) [[clang::unlikely]] {
+    size_t ba_ct = p->build_allocs.count;
+    jmp_buf *volatile old_err = p->errbuf;
+    jmp_buf err = {};
+    p->errbuf = &err;
+    if (setjmp(err)) [[clang::unlikely]] {
         // if an error occured, free all allocations that occured since then
         for (size_t i = ba_ct; i < p->build_allocs.count; i++) {
             free(p->build_allocs.ptrs[i]);
         }
-        return (Statement){
-            .tag = STMT_UNPARSABLE, .line = p->ntokens ? p->tokens[0].line : 0
-        };
+        p->errbuf = old_err;
+        return (Statement){.tag = STMT_UNPARSABLE};
     }
-    Token t;
-    Statement s = (Statement){
-        .tag = STMT_UNPARSABLE, .line = p->ntokens ? p->tokens[0].line : 0
-    };
 
-    switch ((t = advance(p)).type) {
+    Statement s = (Statement){.tag = STMT_UNPARSABLE};
+
+    switch (advance(p).type) {
         case TOKEN_LET: s = var_decl(p, STORE_STACK); break;
         case TOKEN_STATIC: s = var_decl(p, STORE_STATIC); break;
         case TOKEN_IF: s = cond_stmt(p); break;
         case TOKEN_L_CURLY: s = block_stmt(p); break;
         case TOKEN_WHILE: s = while_stmt(p); break;
         case TOKEN_FOREACH: s = foreach_stmt(p); break;
-        default: s = expr_stmt(p); break;
+        default:
+            p->next_tok_i--;
+            s = expr_stmt(p);
+            break;
     }
 
+    p->errbuf = old_err;
     p->build_allocs.count = ba_ct;
+    typeck_stmt((TypeckCtx){.ag = p->ag, .types = p->types}, &s);
 
     return s;
 }
