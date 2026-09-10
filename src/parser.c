@@ -32,7 +32,7 @@
 #include "typeck.h"
 
 #define USE [[clang::use_handle("parser")]]
-// Approximation of ditigs in SIZE_MAX; see https://stackoverflow.com/a/43788824
+// Approximation of digits in SIZE_MAX; see https://stackoverflow.com/a/43788824
 constexpr size_t MAX_SIZE_DIGITS = ((sizeof(size_t) * CHAR_BIT) * 28 / 93 + 2);
 
 typedef UCLExpression *_Nonnull (*PrefixFn)(USE Parser);
