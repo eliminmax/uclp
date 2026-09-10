@@ -84,7 +84,7 @@ typedef struct expression {
 } UCLExpression;
 
 struct array_definition {
-    UCLType *_Nonnull type;
+    UCLType *_Nullable type;
     size_t size;
     UCLExpression *vals [[clang::counted_by(size)]][];
 };

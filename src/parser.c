@@ -456,14 +456,11 @@ static UCLExpression *_Nullable array(USE Parser p) {
     );
     array->size = array_size;
     array->vals[0] = expression(p);
-    array->type = array->vals[0]->type;
+    array->type = NULL;
 
     for (size_t i = 1; i < array_size; i++) {
         p->next_tok_i++; // skip past comma
         array->vals[i] = expression(p);
-        if (array->vals[i]->type != array->type) {
-            error_at(p, 0, "Mismatched types within array");
-        }
     }
 
     UCLExpression *expr = alloc_expr(p);
