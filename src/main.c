@@ -3,10 +3,9 @@
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
-#include <stdarg.h>
-
 #include <errno.h>
 #include <fcntl.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <string.h>
 #include <unistd.h>
@@ -89,7 +88,9 @@ read_error:
 }
 
 [[noreturn]] [[gnu::cold]] [[gnu::format(__printf__, 2, 5)]]
-void report_ice(const char *name, const char *fmt, const char *file, int line, ...) {
+void report_ice(
+    const char *name, const char *fmt, const char *file, int line, ...
+) {
     fprintf(stderr, "INTERNAL COMPILER ERROR: %s (%s:%d)\n", name, file, line);
     va_list ap;
     va_start(ap, line);
@@ -105,7 +106,11 @@ void debug_print_token(Token TOK) {
 #include "include/lang/tokens.h"
 }
 
-struct line_alloc { char *_Nonnull text; size_t len; struct line_alloc *_Nullable prev; };
+struct line_alloc {
+    char *_Nonnull text;
+    size_t len;
+    struct line_alloc *_Nullable prev;
+};
 
 struct line_alloc *_Nullable repl_line(struct line_alloc *_Nullable prev) {
     struct line_alloc *next_line = checked_malloc(sizeof(*next_line));

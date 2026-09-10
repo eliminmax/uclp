@@ -8,6 +8,8 @@
  * Crafting Interpreters book.
  */
 
+#include "parser.h"
+
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -22,7 +24,6 @@
 #include "mem/arena.h"
 #include "mem/checked.h"
 #include "mem/dynarray.h"
-#include "parser.h"
 #include "printerr.h"
 #include "scanner.h"
 #include "sized_string.h"
@@ -148,7 +149,9 @@ static_assert(TOKEN_INT_HEX_64 - TOKEN_INT_BIN == 19);
 }
 
 static uintmax_t number_at(USE Parser p, int offset, int fallback) {
-    REQUIRE(fallback >= 0 && fallback < 4);
+    REQUIRE(
+        fallback == 8 || fallback == 16 || fallback == 32 || fallback == 64
+    );
     Token t = p->tokens[p->next_tok_i - 1 - offset];
     // the one invariant that can't be statically asserted
     REQUIRE(t.type >= TOKEN_INT_BIN && t.type <= TOKEN_INT_HEX_64);
@@ -220,6 +223,19 @@ static inline void init_type_map(USE Parser p) {
     }
 }
 
+static void load_token(USE Parser p) {
+    if (p->next_tok_i == p->ntokens) {
+        if (p->ntokens == p->token_cap) {
+            p->token_cap = new_capacity(p->token_cap);
+            p->tokens =
+                checked_reallocarray(p->tokens, p->token_cap, sizeof(Token));
+        }
+        Token t = p->tokens[p->ntokens++] = next_token(p->scanner);
+
+        if (t.type == TOKEN_UNPARSEABLE) p->panicking = true;
+    }
+}
+
 [[clang::acquire_handle("parser")]]
 Parser parser(String source) {
     Parser p = checked_malloc(sizeof(struct parser));
@@ -228,6 +244,7 @@ Parser parser(String source) {
     StringPool idents = new_pool(ag);
     HashTable types = ht_create();
     Scanner scanner = start_scanner(source, idents);
+    struct var_scope current_vars = {.vars = ht_create(), .outer = NULL};
 
     // default initialization rules initialize all unspecified fields if
     // designated initializer syntax is used
@@ -236,24 +253,17 @@ Parser parser(String source) {
         .idents = idents,
         .types = types,
         .scanner = scanner,
+        .next_tok_i = 0,
+        .ntokens = 1,
+        .token_cap = 8,
+        .current_vars = current_vars,
+        .tokens = checked_malloc(sizeof(Token[8])),
     };
 
     init_type_map(p);
 
+    p->tokens[0] = next_token(p->scanner);
     return p;
-}
-
-static void load_token(USE Parser p) {
-    if (p->next_tok_i == p->ntokens) {
-        if (p->ntokens == p->token_cap) {
-            p->token_cap = new_capacity(p->token_cap);
-            p->tokens =
-                checked_reallocarray(p->tokens, p->token_cap, sizeof(Token));
-        }
-        Token t = p->tokens[++p->ntokens] = next_token(p->scanner);
-
-        if (t.type == TOKEN_UNPARSEABLE) p->panicking = true;
-    }
 }
 
 static Token peek(USE Parser p) {
@@ -266,10 +276,7 @@ static Token advance(USE Parser p) {
     return p->tokens[p->next_tok_i++];
 }
 
-static Token current(USE Parser p) {
-    REQUIRE(p->next_tok_i > 0);
-    return p->tokens[p->next_tok_i - 1];
-}
+static Token current(USE Parser p) { return p->tokens[p->next_tok_i - 1]; }
 
 static bool advance_on(USE Parser p, TokenType type) {
     if (peek(p).type == type) {
@@ -512,14 +519,14 @@ static UCLExpression *_Nonnull literal(USE Parser p) {
     expr->span.start = p->next_tok_i - 1;
     expr->span.end = p->next_tok_i;
     TokenType ty;
-    switch (ty = advance(p).type) {
+    switch (ty = current(p).type) {
         case TOKEN_CHAR: {
             expr->type = ht_lookup(p->types, (String){2, "i8"});
             assert(expr->type != NULL);
-            const char *text = current(p).lexeme.text;
+            const char *text = current(p).lexeme.text + 1;
+            assert(text[-1] == '\'');
             expr->literal.tag = LIT_I8;
             expr->literal._i8 = parse_char(&text);
-            assert(*text == '\'');
             return expr;
         }
         case TOKEN_STR: {
@@ -794,6 +801,7 @@ static UCLExpression *subexpr(USE Parser p, enum expr_prec prec) {
     PrefixFn pref;
     if (!(pref = XPR_RULES[advance(p).type].prefix)) {
         error_at(p, 0, "Expect expression.");
+        return NULL;
     }
 
     UCLExpression *a = pref(p);
@@ -805,7 +813,7 @@ static UCLExpression *subexpr(USE Parser p, enum expr_prec prec) {
         a = infix(p, a);
     }
 
-    typeck_expr((TypeckCtx){.ag = p->ag, .types = p->types}, a);
+    // typeck_expr((TypeckCtx){.ag = p->ag, .types = p->types}, a);
 
     return a;
 }
@@ -1018,7 +1026,7 @@ Statement get_statement(USE Parser p) {
         while (p->build_allocs.count > ba_ct) {
             group_claim(p->ag, p->build_allocs.ptrs[--p->build_allocs.count]);
         }
-        typeck_stmt((TypeckCtx){.ag = p->ag, .types = p->types}, &s);
+        // typeck_stmt((TypeckCtx){.ag = p->ag, .types = p->types}, &s);
     }
 
     return s;
@@ -1060,7 +1068,7 @@ static void dbg_expr_inner(
     const char *start = p->tokens[expr->span.start].lexeme.text;
     const char *end = &end_t.lexeme.text[end_t.lexeme.len];
     write_indent(buf, indent);
-    FIXED("Expr <\"");
+    FIXED("<\"");
     append_chars(buf, end - start, (const uchar *)start);
     FIXED("\">:\n");
     write_indent(buf, indent);
@@ -1157,21 +1165,115 @@ static void dbg_expr_inner(
             break;
         }
     }
-#undef FIXED
 }
 
-void dbg_expr(
-    USE const Parser p, const UCLExpression *_Nonnull expr
-) {
+void dbg_expr(USE const Parser p, const UCLExpression *_Nonnull expr) {
     CharBuffer buf = {};
     dbg_expr_inner(p, expr, &buf, 0);
-    
+
     size_t len = buf.size;
     uchar *c = buf.mem;
 
-    NODEREF uchar * end = buf.mem + buf.size;
+    NODEREF uchar *end = buf.mem + buf.size;
 
-    while(c < end) {
+    while (c < end) {
+        auto w = write(STDERR_FILENO, c, len);
+        if (w < 0) {
+            perror("Failed to write to stderr");
+            free(buf.mem);
+            return;
+        }
+        c += w;
+        len -= w;
+    }
+
+    free(buf.mem);
+}
+
+void dbg_stmt_inner(
+    USE const Parser p, const Statement *stmt, CharBuffer *buf, size_t indent
+) {
+    if (stmt->tag == STMT_END) return;
+    if (stmt->tag == STMT_UNPARSABLE) return;
+
+    REQUIRE(stmt->span.end > stmt->span.start);
+    REQUIRE(stmt->span.end <= p->ntokens);
+
+    const Token end_t = p->tokens[stmt->span.end - 1];
+
+    const char *start = p->tokens[stmt->span.start].lexeme.text;
+    const char *end = &end_t.lexeme.text[end_t.lexeme.len];
+
+    write_indent(buf, indent);
+    FIXED("<\"");
+    append_chars(buf, end - start, (const uchar *)start);
+    FIXED("\">:\n");
+    write_indent(buf, indent);
+
+    switch (stmt->tag) {
+        case STMT_UNPARSABLE: FIXED("UNPARSABLE\n"); break;
+        case STMT_BLOCK: {
+            FIXED("Block: {\n");
+            auto block = stmt->block;
+            for (size_t i = 0; i < block->size; i++) {
+                dbg_stmt_inner(p, &block->statements[i], buf, indent + 1);
+            }
+            write_indent(buf, indent);
+            FIXED("}");
+        }
+        case STMT_IF: TODO();
+        case STMT_WHILE: TODO();
+        case STMT_FOREACH: TODO();
+        case STMT_RETURN: TODO();
+        case STMT_EXPR: {
+            FIXED("Expr:\n");
+            dbg_expr_inner(p, stmt->expr, buf, indent + 1);
+            break;
+        }
+        case STMT_BREAK: TODO();
+        case STMT_VAR_DEC: {
+            auto dec = &stmt->declaration;
+            FIXED("Declare ");
+            switch (dec->placement) {
+                case STORE_STACK: break;
+                case STORE_STATIC: FIXED("[static] ");
+            }
+
+            append_chars(buf, dec->ident->len, (const uchar *)dec->ident->text);
+
+            if (dec->type) {
+                FIXED(": [");
+                write_type(dec->type, buf);
+                FIXED("]");
+            }
+
+            if (dec->value) {
+                FIXED(":\n");
+                dbg_expr_inner(p, dec->value, buf, indent + 1);
+            }
+
+            break;
+        }
+        case STMT_FUN_DEC: TODO();
+        case STMT_EXTERN_VAR: TODO();
+        case STMT_EXTERN_FUN: TODO();
+        case STMT_SYSCALL: TODO();
+        case STMT_END: UNREACHABLE("explicitly handled already");
+    }
+}
+
+#undef FIXED
+
+void dbg_stmt(USE const Parser p, const Statement *_Nonnull stmt) {
+    CharBuffer buf = {};
+    dbg_stmt_inner(p, stmt, &buf, 0);
+
+    size_t len = buf.size;
+    uchar *c = buf.mem;
+
+    NODEREF uchar *end = buf.mem + buf.size;
+
+    while (c < end) {
         auto w = write(STDERR_FILENO, c, len);
         if (w < 0) {
             perror("Failed to write to stderr");
