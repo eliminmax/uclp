@@ -94,10 +94,10 @@ typedef struct ucl_type {
     } tag;
 
     union {
-        struct ucl_type *pointee_type;
+        struct ucl_type *_Nullable pointee_type;
         struct ucl_opaque_type opaque;
         struct ucl_array array;
-        struct ucl_functype *func;
+        struct ucl_functype *_Nonnull func;
     };
 } UCLType;
 

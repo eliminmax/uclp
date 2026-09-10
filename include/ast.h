@@ -86,7 +86,7 @@ typedef struct expression {
 struct array_definition {
     UCLType *_Nullable type;
     size_t size;
-    UCLExpression *vals [[clang::counted_by(size)]][];
+    UCLExpression *_Nonnull vals [[clang::counted_by(size)]][];
 };
 
 // a single program statement - can be one of the following:
@@ -119,6 +119,7 @@ typedef struct statement {
         struct {
             String *_Nonnull ident;
             struct expression *_Nullable value;
+            UCLType *_Nullable type;
             Placement placement;
         } declaration;
 

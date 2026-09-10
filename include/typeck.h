@@ -13,7 +13,7 @@
 #include "table.h"
 
 Alignment ucl_alignof(const UCLType *_Nonnull type);
-void write_type(const UCLType *t, CharBuffer *b);
+void write_type(const UCLType *_Nonnull t, CharBuffer *_Nonnull b);
 
 inline bool is_numeric(const UCLType *_Nonnull type) {
     switch (type->tag) {
