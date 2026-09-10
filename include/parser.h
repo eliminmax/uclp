@@ -16,7 +16,11 @@ typedef struct parser *_Nonnull Parser;
 Parser parser(String source);
 Statement get_statement([[clang::use_handle("parser")]] Parser);
 void free_parser([[clang::release_handle("parser")]] Parser);
+
 void dbg_expr(
     [[clang::use_handle("parser")]] const Parser, const UCLExpression *_Nonnull
+);
+void dbg_stmt(
+    [[clang::use_handle("parser")]] const Parser, const Statement *_Nonnull
 );
 #endif

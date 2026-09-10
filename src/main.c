@@ -13,6 +13,7 @@
 
 #include "mem/checked.h"
 #include "mem/dynarray.h"
+#include "parser.h"
 #include "safety.h"
 #include "scanner.h"
 #include "token.h"
@@ -99,7 +100,7 @@ void report_ice(const char *name, const char *fmt, const char *file, int line, .
     abort();
 }
 
-static void debug_print_token(Token TOK) {
+void debug_print_token(Token TOK) {
 #define DEBUG_TOKENS
 #include "include/lang/tokens.h"
 }
@@ -128,20 +129,15 @@ struct line_alloc *_Nullable repl_line(struct line_alloc *_Nullable prev) {
 }
 
 int main(int argc, char *argv[]) {
-    AllocGroup ag = group_create();
-
     if (argc < 2) {
-        StringPool idents = new_pool(ag);
         struct line_alloc *line = NULL;
         struct line_alloc *new_line;
         while ((new_line = repl_line(line))) {
             line = new_line;
-            Scanner scanner = start_scanner((String){line->len, line->text}, idents);
-            Token t;
-            while ((t = next_token(scanner)).type != TOKEN_EOF) {
-                debug_print_token(t);
-            }
-            free_scanner(scanner);
+            Parser p = parser((String){line->len, line->text});
+            Statement s = {.tag = STMT_UNPARSABLE};
+            while ((s = get_statement(p)).tag != STMT_END) { dbg_stmt(p, &s); }
+            free_parser(p);
         }
 
         while (line) {
@@ -151,10 +147,10 @@ int main(int argc, char *argv[]) {
             line = prev;
         }
 
-        free_pool(idents);
-        group_free(ag);
         return 0;
+
     } else if (argc == 2) {
+        AllocGroup ag = group_create();
         bool had_error = false;
         StringPool idents = new_pool(ag);
         String source = read_source(argv[1]);

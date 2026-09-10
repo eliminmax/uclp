@@ -31,4 +31,5 @@ struct token_sequence tokenize(
     size_t len, AllocGroup ag, const char source[_Nonnull len]
 );
 
+void debug_print_token(Token);
 #endif /* TOKEN_H */
