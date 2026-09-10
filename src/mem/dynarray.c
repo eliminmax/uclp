@@ -14,7 +14,7 @@
 
 extern inline size_t new_capacity(size_t old_cap);
 
-void append_chars(CharBuffer *buf, size_t size, const uchar data[size]) {
+void append_chars(CharBuffer *buf, size_t size, const uchar data[restrict size]) {
     if (buf->capacity - buf->size < size) {
         do {
             buf->capacity = new_capacity(buf->capacity);
