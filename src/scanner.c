@@ -3,6 +3,8 @@
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
+#include "scanner.h"
+
 #include <ctype.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -13,7 +15,6 @@
 #include "mem/checked.h"
 #include "printerr.h"
 #include "safety.h"
-#include "scanner.h"
 #include "token.h"
 
 #define MAX_ERR_TOKEN_SIZE 0x1000
@@ -660,7 +661,6 @@ static enum token_type next_token_type(USE Scanner s) {
 }
 
 Token next_token(USE Scanner s) {
-
     enum token_type type = next_token_type(s);
 
     String lexeme = get_lexeme(s);

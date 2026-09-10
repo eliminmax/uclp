@@ -3,11 +3,12 @@
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
+#include "printerr.h"
+
 #include <stdarg.h>
 
 #include "annotations.h"
 #include "colorize.h"
-#include "printerr.h"
 #include "safety.h"
 
 #define MAX_ERR_TOKEN_SIZE 0x1000

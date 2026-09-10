@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
+#include "typeck.h"
+
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -16,7 +18,6 @@
 #include "safety.h"
 #include "table.h"
 #include "todo.h"
-#include "typeck.h"
 
 // Approximation of digits in SIZE_MAX, adapted from chux's StackOverflow answer
 // (see https://stackoverflow.com/a/43788824)
@@ -176,14 +177,12 @@ static bool typeck_unary(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
             }
 
         case TOKEN_BIT_NOT:
-            if (!ensure_numeric("bitwise not", expr->type, 0))
-                return false;
+            if (!ensure_numeric("bitwise not", expr->type, 0)) return false;
             expr->type = inner_type;
             return true;
 
         case TOKEN_MINUS:
-            if (!ensure_numeric("unary negation", inner_type, 0))
-                return false;
+            if (!ensure_numeric("unary negation", inner_type, 0)) return false;
             expr->type = inner_type;
             return true;
 
@@ -269,8 +268,9 @@ static bool bin_same_type(
     return false;
 }
 
-static bool ensure_both_numeric(const char *op, size_t line, const UCLType *_Nonnull types[2]) {
-
+static bool ensure_both_numeric(
+    const char *op, size_t line, const UCLType *_Nonnull types[2]
+) {
     bool ret = true;
     if (!is_numeric(types[0])) [[clang::unlikely]] {
         fprintf(
@@ -284,7 +284,12 @@ static bool ensure_both_numeric(const char *op, size_t line, const UCLType *_Non
         ret = false;
     }
     if (!is_numeric(types[1])) [[clang::unlikely]] {
-        fprintf(stderr, "Erorr [line %zu]: %s requires numeric operands, but RHS is ", line, op);
+        fprintf(
+            stderr,
+            "Erorr [line %zu]: %s requires numeric operands, but RHS is ",
+            line,
+            op
+        );
         write_type_err(types[0]);
         fputs(".\n", stderr);
         ret = false;
@@ -292,12 +297,11 @@ static bool ensure_both_numeric(const char *op, size_t line, const UCLType *_Non
     return ret;
 }
 
-
 static enum ucl_type_tag bin_larger_numeric(
     const char *op, size_t line, const UCLType *_Nonnull types[2]
 ) {
-    if (ensure_numeric(op, types[0], line) && ensure_numeric(op, types[1], line))
-        [[clang::likely]] {
+    if (ensure_numeric(op, types[0], line) &&
+        ensure_numeric(op, types[1], line)) [[clang::likely]] {
         return types[0]->tag >= types[1]->tag ? types[0]->tag : types[1]->tag;
     }
 
