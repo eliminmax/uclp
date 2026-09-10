@@ -176,20 +176,20 @@ static bool typeck_unary(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
             }
 
         case TOKEN_BIT_NOT:
-            if (!ensure_numeric("bitwise not", expr->type, expr->line))
+            if (!ensure_numeric("bitwise not", expr->type, 0))
                 return false;
             expr->type = inner_type;
             return true;
 
         case TOKEN_MINUS:
-            if (!ensure_numeric("unary negation", inner_type, expr->line))
+            if (!ensure_numeric("unary negation", inner_type, 0))
                 return false;
             expr->type = inner_type;
             return true;
 
         case TOKEN_SIGNED_BITCAST_8:
         case TOKEN_UNSIGNED_BITCAST_8:
-            if (!ensure_numeric("bitcast", inner_type, expr->line)) return false;
+            if (!ensure_numeric("bitcast", inner_type, 0)) return false;
             if (!expr->type) {
                 expr->type = ht_lookup(ctx.types, (String){2, "i8"});
             }
@@ -197,7 +197,7 @@ static bool typeck_unary(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
 
         case TOKEN_SIGNED_BITCAST_16:
         case TOKEN_UNSIGNED_BITCAST_16:
-            if (!ensure_numeric("bitcast", inner_type, expr->line)) return false;
+            if (!ensure_numeric("bitcast", inner_type, 0)) return false;
             if (!expr->type) {
                 expr->type = ht_lookup(ctx.types, (String){3, "i16"});
             }
@@ -205,7 +205,7 @@ static bool typeck_unary(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
 
         case TOKEN_SIGNED_BITCAST_32:
         case TOKEN_UNSIGNED_BITCAST_32:
-            if (!ensure_numeric("bitcast", inner_type, expr->line)) return false;
+            if (!ensure_numeric("bitcast", inner_type, 0)) return false;
             if (!expr->type) {
                 expr->type = ht_lookup(ctx.types, (String){3, "i32"});
             }
@@ -213,7 +213,7 @@ static bool typeck_unary(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
 
         case TOKEN_SIGNED_BITCAST_64:
         case TOKEN_UNSIGNED_BITCAST_64:
-            if (!ensure_numeric("bitcast", inner_type, expr->line)) return false;
+            if (!ensure_numeric("bitcast", inner_type, 0)) return false;
             if (!expr->type) {
                 expr->type = ht_lookup(ctx.types, (String){3, "i64"});
             }
@@ -307,15 +307,15 @@ static enum ucl_type_tag bin_larger_numeric(
 static bool typeck_bin(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
     REQUIRE(expr->tag == XPR_BINARY);
 
-    if (!typeck_expr(ctx, expr->binary.operands[0])) return false;
-    REQUIRE(expr->binary.operands[0]->type != nullptr);
+    if (!typeck_expr(ctx, expr->binary.lhs)) return false;
+    REQUIRE(expr->binary.lhs->type != nullptr);
 
-    if (!typeck_expr(ctx, expr->binary.operands[1])) return false;
-    REQUIRE(expr->binary.operands[1]->type != nullptr);
+    if (!typeck_expr(ctx, expr->binary.rhs)) return false;
+    REQUIRE(expr->binary.rhs->type != nullptr);
 
     UCLType *_Nonnull types[2] = {
-        expr->binary.operands[0]->type,
-        expr->binary.operands[1]->type,
+        expr->binary.lhs->type,
+        expr->binary.rhs->type,
     };
 
     switch (expr->binary.op) {
