@@ -14,7 +14,9 @@
 #include <stdarg.h>
 #include <stdckdint.h>
 #include <string.h>
+#include <unistd.h>
 
+#include "annotations.h"
 #include "ast.h"
 #include "lang/types.h"
 #include "mem/arena.h"
@@ -905,7 +907,9 @@ static Statement block_stmt(USE Parser p) {
 }
 
 static Statement cond_stmt(USE Parser p) {
-    Statement stmt = {.tag = STMT_IF, .conditional = {}, .span.start = p->next_tok_i - 1};
+    Statement stmt = {
+        .tag = STMT_IF, .conditional = {}, .span.start = p->next_tok_i - 1
+    };
 
     if (!consume(p, TOKEN_L_PAREN, "Expect '(' after 'if'")) {
         stmt.tag = STMT_UNPARSABLE;
@@ -1031,4 +1035,152 @@ void free_parser([[clang::release_handle("parser")]] Parser p) {
     group_free(p->ag);
 
     free(p);
+}
+
+static void write_indent(CharBuffer *buf, size_t indent) {
+    while (indent > 8) [[clang::unlikely]] {
+        append_chars(buf, 16, u8"                ");
+        indent--;
+    }
+    append_chars(buf, indent * 2, u8"                ");
+}
+
+static void dbg_expr_inner(
+    USE const Parser p,
+    const UCLExpression *_Nonnull expr,
+    CharBuffer *buf,
+    size_t indent
+) {
+    REQUIRE(expr->span.end > expr->span.start);
+    REQUIRE(expr->span.end <= p->ntokens);
+
+#define FIXED(s) append_chars(buf, sizeof(s) - 1, u8##s)
+    const Token end_t = p->tokens[expr->span.end - 1];
+
+    const char *start = p->tokens[expr->span.start].lexeme.text;
+    const char *end = &end_t.lexeme.text[end_t.lexeme.len];
+    write_indent(buf, indent);
+    FIXED("Expr <\"");
+    append_chars(buf, end - start, (const uchar *)start);
+    FIXED("\">:\n");
+    write_indent(buf, indent);
+
+    switch (expr->tag) {
+        case XPR_LITERAL:
+            FIXED("Literal `");
+            append_chars(buf, end - start, (const uchar *)start);
+            FIXED("`");
+            break;
+        case XPR_VAR:
+            FIXED("Variable `");
+            append_chars(buf, end - start, (const uchar *)start);
+            FIXED("`");
+            break;
+        case XPR_UNARY: {
+            FIXED("Unary `");
+            String s = p->tokens[expr->span.start].lexeme;
+            append_chars(buf, s.len, (const uchar *)s.text);
+            FIXED("`(\n");
+            dbg_expr_inner(p, expr->unary.operand, buf, indent + 1);
+            FIXED("\n");
+            write_indent(buf, indent);
+            FIXED(")");
+            break;
+        }
+        case XPR_BINARY: {
+            FIXED("Binary `");
+            String s = p->tokens[expr->binary.rhs->span.start - 1].lexeme;
+            append_chars(buf, s.len, (const uchar *)s.text);
+            FIXED("`(\n");
+            dbg_expr_inner(p, expr->binary.lhs, buf, indent + 1);
+            FIXED(",\n");
+            dbg_expr_inner(p, expr->binary.rhs, buf, indent + 1);
+            write_indent(buf, indent);
+            FIXED(")");
+            break;
+        }
+        case XPR_FUNC_CALL: TODO();
+        case XPR_GROUP: {
+            FIXED("Group (\n");
+            dbg_expr_inner(p, expr->grouped, buf, indent + 1);
+            FIXED("\n");
+            write_indent(buf, indent);
+            FIXED(")");
+            break;
+        }
+        case XPR_TYPECAST: {
+            FIXED("Cast to ");
+            write_type(expr->type, buf);
+            FIXED("(\n");
+            dbg_expr_inner(p, expr->type_cast.inner, buf, indent + 1);
+            FIXED("\n");
+            write_indent(buf, indent);
+            FIXED(")");
+            break;
+        }
+        case XPR_ARRAY: {
+            FIXED("Array [\n");
+            for (size_t i = 0; i < expr->array->size; i++) {
+                dbg_expr_inner(p, expr->array->vals[i], buf, indent + 1);
+                FIXED(",\n");
+            }
+
+            write_indent(buf, indent);
+            FIXED("]");
+            break;
+        }
+        case XPR_ASSIGN: {
+            if (expr->assign.op == TOKEN_EQ) {
+                FIXED("Assign(\n");
+            } else {
+                FIXED("Compound Assign <");
+                String s = p->tokens[expr->assign.value->span.start - 1].lexeme;
+                append_chars(buf, s.len, (const uchar *)s.text);
+                FIXED(">(\n");
+            }
+            dbg_expr_inner(p, expr->assign.place, buf, indent + 1);
+            FIXED(",\n");
+            dbg_expr_inner(p, expr->assign.value, buf, indent + 1);
+            FIXED("\n");
+            write_indent(buf, indent);
+            FIXED(")");
+            break;
+        }
+        case XPR_INDEX: {
+            FIXED("Index(\n");
+            dbg_expr_inner(p, expr->index.array, buf, indent + 1);
+            FIXED(",\n");
+            dbg_expr_inner(p, expr->index.index, buf, indent + 1);
+            FIXED("\n");
+            write_indent(buf, indent);
+            FIXED(")");
+            break;
+        }
+    }
+#undef FIXED
+}
+
+void dbg_expr(
+    USE const Parser p, const UCLExpression *_Nonnull expr
+) {
+    CharBuffer buf = {};
+    dbg_expr_inner(p, expr, &buf, 0);
+    
+    size_t len = buf.size;
+    uchar *c = buf.mem;
+
+    NODEREF uchar * end = buf.mem + buf.size;
+
+    while(c < end) {
+        auto w = write(STDERR_FILENO, c, len);
+        if (w < 0) {
+            perror("Failed to write to stderr");
+            free(buf.mem);
+            return;
+        }
+        c += w;
+        len -= w;
+    }
+
+    free(buf.mem);
 }
