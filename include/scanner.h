@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-#include "typenames.h"
 #include "string_manager.h"
 #include "token.h"
+#include "typenames.h"
 
 typedef struct scanner *_Nonnull Scanner;
 

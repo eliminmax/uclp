@@ -5,11 +5,12 @@
  *
  */
 
+#include "mem/arena.h"
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "mem/arena.h"
 #include "mem/checked.h"
 #include "safety.h"
 #include "typenames.h"

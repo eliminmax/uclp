@@ -8,6 +8,8 @@
  * Crafting Interpreters book.
  */
 
+#include "parser.h"
+
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -22,7 +24,6 @@
 #include "mem/arena.h"
 #include "mem/checked.h"
 #include "mem/dynarray.h"
-#include "parser.h"
 #include "printerr.h"
 #include "scanner.h"
 #include "sized_string.h"
@@ -188,7 +189,9 @@ too_large:
         error_at(p, offset, "too large: '%4093s...'", t.lexeme.text);
         return -1;
     } else {
-        error_at(p, offset, "too large: '%.*s'", (int)t.lexeme.len, t.lexeme.text);
+        error_at(
+            p, offset, "too large: '%.*s'", (int)t.lexeme.len, t.lexeme.text
+        );
         return -1;
     }
 }

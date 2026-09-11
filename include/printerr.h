@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 #include <stdarg.h>
-
 #include <stddef.h>
+
 #include "typenames.h"
 
 // print an error message, highlighting the source of the error

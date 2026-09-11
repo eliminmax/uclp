@@ -29,7 +29,10 @@ inline bool is_numeric(const UCLType *_Nonnull type) {
     }
 }
 
-typedef struct { HashTable types; AllocGroup ag; } TypeckCtx;
+typedef struct {
+    HashTable types;
+    AllocGroup ag;
+} TypeckCtx;
 
 bool typeck_expr(TypeckCtx ctx, UCLExpression *_Nonnull expr);
 bool typeck_stmt(TypeckCtx ctx, Statement *_Nonnull stmt);

@@ -13,7 +13,8 @@
 #endif
 // an empty NO-OP function called within the TODO macro
 // marked as deprecated to trigger warnings wherever the TODO macro is used
-[[gnu::artificial]] static inline void TODO(...) {}
+[[gnu::artificial]] static inline void TODO(...) {
+}
 
 // macro that does the following:
 //

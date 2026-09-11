@@ -15,7 +15,10 @@
 
 typedef enum : uint8_t { STORE_STACK, STORE_STATIC } Placement;
 
-typedef struct { size_t start; size_t end; } AstSpan;
+typedef struct {
+    size_t start;
+    size_t end;
+} AstSpan;
 
 typedef struct expression {
     TU_ENUM(
@@ -65,6 +68,7 @@ typedef struct expression {
             struct expression *_Nonnull index;
         } index;
         struct expression *_Nonnull grouped;
+
         struct literal_expression {
             TU_ENUM(tag, uint8_t, LIT_STR, LIT_I8, LIT_I16, LIT_I32, LIT_I64);
 
@@ -76,7 +80,6 @@ typedef struct expression {
                 ucl_i64 _i64;
             };
         } literal;
-
     };
 
     UCLType *_Nullable type;
@@ -145,6 +148,7 @@ typedef struct statement {
         struct expression *_Nonnull expr;
         struct function_decl *_Nonnull fun_dec;
     };
+
     AstSpan span;
 } Statement;
 
@@ -170,8 +174,10 @@ struct function_decl {
     TU_ENUM(tag, uint8_t, FUNC_DEF, FUNC_INTERNAL, FUNC_DYNAMIC);
     String name;
     uint8_t nargs;
+
     union {
         struct block body;
+
         struct {
             String *_Nonnull symbol;
             String *_Nonnull dlopen_name;

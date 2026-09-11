@@ -20,6 +20,8 @@ inline size_t new_capacity(size_t old_cap) {
     return old_cap >= 8 ? old_cap * 2 : 8;
 }
 
-void append_chars(CharBuffer *buf, size_t size, const uchar data[restrict size]);
+void append_chars(
+    CharBuffer *buf, size_t size, const uchar data[restrict size]
+);
 
 #endif /* UCLP_MEM_DYNARRAY_H */
