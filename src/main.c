@@ -115,11 +115,11 @@ struct line_alloc {
 struct line_alloc *_Nullable repl_line(struct line_alloc *_Nullable prev) {
     struct line_alloc *next_line = checked_malloc(sizeof(*next_line));
     size_t n = 0;
-    next_line->text = NULL;
+    char *text = NULL;
     errno = 0;
-    ssize_t ret = getline(&next_line->text, &n, stdin);
+    ssize_t ret = getline(&text, &n, stdin);
     if (ret < 0) {
-        free(next_line->text);
+        free(text);
         if (errno) [[clang::unlikely]] {
             perror("Failed to read input");
             abort();
@@ -127,6 +127,9 @@ struct line_alloc *_Nullable repl_line(struct line_alloc *_Nullable prev) {
         free(next_line);
         return NULL;
     }
+
+    REQUIRE(text != NULL);
+    next_line->text = text;
 
     next_line->len = ret;
     next_line->prev = prev;
