@@ -968,11 +968,16 @@ end:
 
 static Statement expr_stmt(USE Parser p) {
     UCLExpression *_Nonnull expr = expression(p);
-    Statement stmt = {
-        .tag = STMT_EXPR,
-        .expr = expr,
-        .span.start = expr->span.start,
-    };
+    Statement stmt = {.tag = STMT_EXPR};
+    if (expr) {
+        stmt = (Statement){
+            .tag = STMT_EXPR,
+            .expr = expr,
+            .span.start = expr->span.start,
+        };
+    } else {
+        stmt = (Statement){.tag = STMT_UNPARSABLE};
+    }
     if (!consume(p, TOKEN_SEMICOLON, "Expect ';' after expression statement")) {
         stmt.tag = STMT_UNPARSABLE;
     }
