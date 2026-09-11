@@ -139,6 +139,7 @@ void group_free(
         next = segment->next;
         free(segment->segment);
         free(segment);
+        segment = next;
     } while (next);
     free(ag);
 }
