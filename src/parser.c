@@ -1120,6 +1120,7 @@ static void dbg_expr_inner(
             dbg_expr_inner(p, expr->binary.lhs, buf, indent + 1);
             FIXED(",\n");
             dbg_expr_inner(p, expr->binary.rhs, buf, indent + 1);
+            FIXED("\n");
             write_indent(buf, indent);
             FIXED(")");
             break;
