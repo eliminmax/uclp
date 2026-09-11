@@ -157,7 +157,7 @@ struct block {
 struct function_call {
     struct expression *_Nonnull callee;
     uint8_t nargs;
-    struct expression *_Nonnull args [[clang::counted_by(nargs)]];
+    struct expression *_Nullable args [[clang::counted_by(nargs)]];
 };
 
 struct function_arg {

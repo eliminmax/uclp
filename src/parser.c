@@ -8,8 +8,6 @@
  * Crafting Interpreters book.
  */
 
-#include "parser.h"
-
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -24,6 +22,7 @@
 #include "mem/arena.h"
 #include "mem/checked.h"
 #include "mem/dynarray.h"
+#include "parser.h"
 #include "printerr.h"
 #include "scanner.h"
 #include "sized_string.h"
@@ -178,18 +177,18 @@ static uintmax_t number_at(USE Parser p, int offset, int fallback) {
     }
 
     errno = 0;
-    char *endptr;
+    char *endptr = NULL;
     uintmax_t val = strtoumax((char *)t.lexeme.text, &endptr, base);
-    if (errno == ERANGE || *endptr || val > max) goto too_large;
+    if (errno == ERANGE || val > max) goto too_large;
 
     return val;
 
 too_large:
     if (t.lexeme.len > 0x1000) {
-        error_at(p, offset, "'%4093s...'", t.lexeme.text);
+        error_at(p, offset, "too large: '%4093s...'", t.lexeme.text);
         return -1;
     } else {
-        error_at(p, offset, "'%.*s'", (int)t.lexeme.len, t.lexeme.text);
+        error_at(p, offset, "too large: '%.*s'", (int)t.lexeme.len, t.lexeme.text);
         return -1;
     }
 }
@@ -276,7 +275,15 @@ static Token advance(USE Parser p) {
     return p->tokens[p->next_tok_i++];
 }
 
-static Token current(USE Parser p) { return p->tokens[p->next_tok_i - 1]; }
+static Token previous(USE Parser p) {
+    REQUIRE(p->next_tok_i > 1);
+    return p->tokens[p->next_tok_i - 2];
+}
+
+static Token current(USE Parser p) {
+    REQUIRE(p->next_tok_i > 0);
+    return p->tokens[p->next_tok_i - 1];
+}
 
 static bool advance_on(USE Parser p, TokenType type) {
     if (peek(p).type == type) {
@@ -292,7 +299,7 @@ struct [[deprecated]] consume_result {
 
 [[nodiscard, gnu::format_matches(__printf__, 3, "")]]
 static bool consume(USE Parser p, enum token_type ty, const char *msg) {
-    if (peek(p).type == ty) { return true; }
+    if (advance_on(p, ty)) [[clang::likely]] { return true; }
     error_at(p, 1, msg);
     return false;
 }
@@ -300,11 +307,10 @@ static bool consume(USE Parser p, enum token_type ty, const char *msg) {
 extern inline String as_string(CharBuffer);
 
 static UCLType *read_type(USE Parser p) {
-    Token tok;
     UCLType *type = NULL;
     CharBuffer name_buf = (CharBuffer){0, 0, NULL};
     bool new_alloc = false;
-    switch ((tok = advance(p)).type) {
+    switch (advance(p).type) {
         case TOKEN_I8: type = ht_lookup(p->types, (String){2, "i8"}); break;
         case TOKEN_I16: type = ht_lookup(p->types, (String){3, "i16"}); break;
         case TOKEN_I32: type = ht_lookup(p->types, (String){3, "i32"}); break;
@@ -321,7 +327,7 @@ static UCLType *read_type(USE Parser p) {
             }
             break;
         }
-        default: error_at(p, 0, "Expected type");
+        default: error_at(p, 0, "Expected type"); return NULL;
     }
 
     write_type(type, &name_buf);
@@ -338,6 +344,7 @@ static UCLType *read_type(USE Parser p) {
         group_claim(p->ag, type);
     }
 
+    Token tok;
     while (advance_on(p, TOKEN_L_SQUARE)) {
         switch ((tok = advance(p)).type) {
             case TOKEN_INT_BIN:
@@ -352,10 +359,6 @@ static UCLType *read_type(USE Parser p) {
                 type = arr;
                 break;
             default:
-                if (new_alloc) {
-                    free(type);
-                    new_alloc = false;
-                }
 
                 if (tok.type >= TOKEN_INT_BIN && tok.type <= TOKEN_INT_HEX_64) {
                     if ((tok.type - TOKEN_INT_BIN) % 5) {
@@ -364,11 +367,14 @@ static UCLType *read_type(USE Parser p) {
                 } else {
                     error_at(p, 0, "Array size must be numeric literal");
                 }
+                if (new_alloc) free(type);
+                return NULL;
         }
 
         if (!advance_on(p, TOKEN_R_SQUARE)) {
-            free(type);
+            if (new_alloc) free(type);
             error_at(p, 0, "Expect ']' after array size.");
+            return NULL;
         }
 
         char suf_buf[MAX_SIZE_DIGITS + 3] = {};
@@ -475,7 +481,7 @@ static UCLExpression *_Nullable array(USE Parser p) {
     UCLExpression *expr = alloc_expr(p);
     expr->tag = XPR_ARRAY;
     expr->array = array;
-    expr->type = array_of(p, array_size, array->type);
+    expr->type = NULL;
     expr->span.start = array_start - 1;
     expr->span.end = p->next_tok_i;
     return expr;
@@ -522,9 +528,7 @@ static UCLExpression *_Nonnull literal(USE Parser p) {
     switch (ty = current(p).type) {
         case TOKEN_CHAR: {
             expr->type = ht_lookup(p->types, (String){2, "i8"});
-            assert(expr->type != NULL);
             const char *text = current(p).lexeme.text + 1;
-            assert(text[-1] == '\'');
             expr->literal.tag = LIT_I8;
             expr->literal._i8 = parse_char(&text);
             return expr;
@@ -565,7 +569,7 @@ static UCLExpression *_Nonnull literal(USE Parser p) {
 }
 
 static UCLExpression *_Nullable grouping(USE Parser p) {
-    size_t start = p->next_tok_i - 1;
+    size_t start = p->next_tok_i;
     UCLExpression *grouped = expression(p);
     if (!consume(
             p, TOKEN_R_PAREN, "Expected ')' after parenthesized expression"
@@ -586,8 +590,8 @@ static UCLExpression *_Nullable ident(USE Parser p) {
     expr->tag = XPR_VAR;
     expr->var_name = intern(p->idents, tok.lexeme);
     expr->type = type_of_binding(p, &p->current_vars, expr->var_name);
-    expr->span.start = p->next_tok_i;
-    expr->span.end = p->next_tok_i + 1;
+    expr->span.start = p->next_tok_i - 1;
+    expr->span.end = p->next_tok_i;
     return expr;
 }
 
@@ -595,7 +599,8 @@ static UCLExpression *_Nullable unary(USE Parser p) {
     size_t start = p->next_tok_i - 1;
     UCLExpression *expr = alloc_expr(p);
     expr->tag = XPR_UNARY;
-    expr->unary.op = current(p).type;
+    expr->unary.op = previous(p).type;
+    advance(p);
     expr->unary.operand = subexpr(p, XPREC_UNARY);
     expr->span.start = start;
     expr->span.end = p->next_tok_i;
@@ -603,7 +608,7 @@ static UCLExpression *_Nullable unary(USE Parser p) {
 }
 
 static UCLExpression *_Nullable typecast(USE Parser p) {
-    size_t start = p->next_tok_i - 1;
+    size_t start = p->next_tok_i;
     UCLExpression *expr = alloc_expr(p);
     expr->tag = XPR_TYPECAST;
     expr->type = read_type(p);
@@ -639,6 +644,7 @@ static UCLExpression *_Nullable call(USE Parser p, UCLExpression *_Nonnull e) {
     static thread_local UCLExpression *ARGS_BUF[256];
     UCLExpression *new_expr = alloc_expr(p);
     new_expr->tag = XPR_FUNC_CALL;
+    new_expr->func_call = ALLOCATE(p, struct function_call);
     new_expr->func_call->callee = e;
     uint8_t nargs = 0;
     if (!advance_on(p, TOKEN_R_PAREN)) {
@@ -675,8 +681,10 @@ static UCLExpression *_Nullable binary(
     UCLExpression *new_expr = alloc_expr(p);
     TokenType op = current(p).type;
     enum expr_prec prec = get_rule(op).precedence;
-    UCLExpression *rhs = subexpr(p, prec + 1);
+    advance(p);
+    UCLExpression *rhs = subexpr(p, prec);
     new_expr->binary.op = op;
+    new_expr->tag = XPR_BINARY;
 
     new_expr->binary.lhs = e;
     new_expr->binary.rhs = rhs;
@@ -797,18 +805,15 @@ static const ParseRule XPR_RULES[TOKEN_EOF + 1] = {
 
 // parse a subexpression using the XPR_RULES Pratt parsing table
 static UCLExpression *subexpr(USE Parser p, enum expr_prec prec) {
-    size_t start = p->next_tok_i - 1;
     PrefixFn pref;
-    if (!(pref = XPR_RULES[advance(p).type].prefix)) {
-        error_at(p, 0, "Expect expression.");
+    if (!(pref = XPR_RULES[current(p).type].prefix)) {
+        error_at(p, 0, "Expect expression (t: %d).", (int)current(p).type);
         return NULL;
     }
 
     UCLExpression *a = pref(p);
-    a->span.start = start;
-    a->span.end = p->next_tok_i;
 
-    while (prec <= XPR_RULES[current(p).type].precedence) {
+    while (prec <= XPR_RULES[peek(p).type].precedence) {
         InfixFn infix = XPR_RULES[advance(p).type].infix;
         a = infix(p, a);
     }
@@ -825,7 +830,7 @@ static int ident_printf_len(const String *s) {
 }
 
 static Statement var_decl(USE Parser p, Placement plcmnt) {
-    size_t start = p->next_tok_i - 1;
+    size_t start = p->next_tok_i;
     Statement stmt = {.tag = STMT_VAR_DEC};
     stmt.span.start = start;
     if (!consume(p, TOKEN_IDENT, "Expect variable name")) {
@@ -880,7 +885,7 @@ static Statement block_stmt(USE Parser p) {
     size_t cap = 8;
     size_t count = 0;
     size_t alloc_index = p->build_allocs.count;
-    size_t start = p->next_tok_i - 1;
+    size_t start = p->next_tok_i;
     tracked_alloc(p, sizeof(Statement[8]));
 #define BODY (p->build_allocs.ptrs[alloc_index])
 
@@ -916,7 +921,7 @@ static Statement block_stmt(USE Parser p) {
 
 static Statement cond_stmt(USE Parser p) {
     Statement stmt = {
-        .tag = STMT_IF, .conditional = {}, .span.start = p->next_tok_i - 1
+        .tag = STMT_IF, .conditional = {}, .span.start = p->next_tok_i
     };
 
     if (!consume(p, TOKEN_L_PAREN, "Expect '(' after 'if'")) {
@@ -967,11 +972,11 @@ static Statement expr_stmt(USE Parser p) {
         .tag = STMT_EXPR,
         .expr = expr,
         .span.start = expr->span.start,
-        .span.end = p->next_tok_i
     };
     if (!consume(p, TOKEN_SEMICOLON, "Expect ';' after expression statement")) {
         stmt.tag = STMT_UNPARSABLE;
     }
+    stmt.span.end = p->next_tok_i;
     return stmt;
 }
 
@@ -1003,20 +1008,18 @@ Statement get_statement(USE Parser p) {
     Statement s = (Statement){.tag = STMT_UNPARSABLE};
 
     switch (advance(p).type) {
+        case TOKEN_EOF: return (Statement){.tag = STMT_END};
         case TOKEN_LET: s = var_decl(p, STORE_STACK); break;
         case TOKEN_STATIC: s = var_decl(p, STORE_STATIC); break;
         case TOKEN_IF: s = cond_stmt(p); break;
         case TOKEN_L_CURLY: s = block_stmt(p); break;
         case TOKEN_WHILE: s = while_stmt(p); break;
         case TOKEN_FOREACH: s = foreach_stmt(p); break;
-        default:
-            p->next_tok_i--;
-            s = expr_stmt(p);
-            break;
+        default: s = expr_stmt(p); break;
     }
 
     if (p->panicking) {
-        assert(s.tag == STMT_UNPARSABLE);
+        s.tag = STMT_UNPARSABLE;
         while (p->build_allocs.count > ba_ct) {
             free(p->build_allocs.ptrs[--p->build_allocs.count]);
         }
@@ -1036,11 +1039,19 @@ void free_parser([[clang::release_handle("parser")]] Parser p) {
     for (size_t i = 0; i < p->build_allocs.count; i++) {
         free(p->build_allocs.ptrs[i]);
     }
+
+    struct var_scope *scope = &p->current_vars;
+    while (scope) {
+        ht_cleanup(scope->vars, NULL);
+        scope = scope->outer;
+    }
     free_scanner(p->scanner);
     free_pool(p->idents);
     ht_cleanup(p->types, NULL);
+    free(p->build_allocs.ptrs);
 
     group_free(p->ag);
+    free(p->tokens);
 
     free(p);
 }
@@ -1048,9 +1059,9 @@ void free_parser([[clang::release_handle("parser")]] Parser p) {
 static void write_indent(CharBuffer *buf, size_t indent) {
     while (indent > 8) [[clang::unlikely]] {
         append_chars(buf, 16, u8"                ");
-        indent--;
+        indent -= 8;
     }
-    append_chars(buf, indent * 2, u8"                ");
+    if (indent) append_chars(buf, indent * 2, u8"                ");
 }
 
 static void dbg_expr_inner(
@@ -1066,12 +1077,13 @@ static void dbg_expr_inner(
     const Token end_t = p->tokens[expr->span.end - 1];
 
     const char *start = p->tokens[expr->span.start].lexeme.text;
-    const char *end = &end_t.lexeme.text[end_t.lexeme.len];
+    const char NODEREF *end = &end_t.lexeme.text[end_t.lexeme.len];
     write_indent(buf, indent);
     FIXED("<\"");
     append_chars(buf, end - start, (const uchar *)start);
     FIXED("\">:\n");
     write_indent(buf, indent);
+    FIXED(" | ");
 
     switch (expr->tag) {
         case XPR_LITERAL:
@@ -1205,7 +1217,7 @@ void dbg_stmt_inner(
     const char *end = &end_t.lexeme.text[end_t.lexeme.len];
 
     write_indent(buf, indent);
-    FIXED("<\"");
+    FIXED("Statement <\"");
     append_chars(buf, end - start, (const uchar *)start);
     FIXED("\">:\n");
     write_indent(buf, indent);
@@ -1285,4 +1297,5 @@ void dbg_stmt(USE const Parser p, const Statement *_Nonnull stmt) {
     }
 
     free(buf.mem);
+    write(STDERR_FILENO, "\n", 1);
 }
