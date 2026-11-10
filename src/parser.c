@@ -587,7 +587,7 @@ static UCLExpression *_Nullable grouping(USE Parser p) {
 
 static UCLExpression *_Nullable ident(USE Parser p) {
     Token tok = current(p);
-    UCLExpression *expr = checked_malloc(sizeof(UCLExpression));
+    UCLExpression *expr = alloc_expr(p);
     expr->tag = XPR_VAR;
     expr->var_name = intern(p->idents, tok.lexeme);
     expr->type = type_of_binding(p, &p->current_vars, expr->var_name);
