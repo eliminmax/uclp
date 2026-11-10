@@ -278,11 +278,6 @@ static Token advance(USE Parser p) {
     return p->tokens[p->next_tok_i++];
 }
 
-static Token previous(USE Parser p) {
-    REQUIRE(p->next_tok_i > 1);
-    return p->tokens[p->next_tok_i - 2];
-}
-
 static Token current(USE Parser p) {
     REQUIRE(p->next_tok_i > 0);
     return p->tokens[p->next_tok_i - 1];
@@ -570,6 +565,7 @@ static UCLExpression *_Nonnull literal(USE Parser p) {
 }
 
 static UCLExpression *_Nullable grouping(USE Parser p) {
+    advance(p);
     size_t start = p->next_tok_i;
     UCLExpression *grouped = expression(p);
     if (!consume(
@@ -597,10 +593,11 @@ static UCLExpression *_Nullable ident(USE Parser p) {
 }
 
 static UCLExpression *_Nullable unary(USE Parser p) {
+    REQUIRE(p->next_tok_i > 0);
     size_t start = p->next_tok_i - 1;
     UCLExpression *expr = alloc_expr(p);
     expr->tag = XPR_UNARY;
-    expr->unary.op = previous(p).type;
+    expr->unary.op = current(p).type;
     advance(p);
     expr->unary.operand = subexpr(p, XPREC_UNARY);
     expr->span.start = start;
@@ -625,18 +622,17 @@ static UCLExpression *_Nullable typecast(USE Parser p) {
 static UCLExpression *_Nullable index_(
     USE Parser p, UCLExpression *_Nonnull e
 ) {
-    do {
-        UCLExpression *new_expr = alloc_expr(p);
-        new_expr->tag = XPR_INDEX;
-        new_expr->index.array = e;
-        new_expr->index.index = expression(p);
-        new_expr->span.start = e->span.start;
-        new_expr->span.end = p->next_tok_i;
-        e = new_expr;
-        if (!consume(p, TOKEN_R_SQUARE, "expect ']' after array index.")) {
-            return NULL;
-        }
-    } while (advance_on(p, TOKEN_L_SQUARE));
+    advance(p);
+    UCLExpression *new_expr = alloc_expr(p);
+    new_expr->tag = XPR_INDEX;
+    new_expr->index.array = e;
+    new_expr->index.index = expression(p);
+    new_expr->span.start = e->span.start;
+    if (!consume(p, TOKEN_R_SQUARE, "expect ']' after array index.")) {
+        return NULL;
+    }
+    new_expr->span.end = p->next_tok_i;
+    e = new_expr;
 
     return e;
 }
