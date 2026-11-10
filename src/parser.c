@@ -318,10 +318,14 @@ static UCLType *read_type(USE Parser p) {
             if (advance_on(p, TOKEN_DYNAMIC)) {
                 type = ht_lookup(p->types, (String){8, "*dynamic"});
             } else {
+                UCLType *pointee_type = read_type(p);
+                if (pointee_type == NULL) {
+                    return NULL;
+                }
                 new_alloc = true;
                 type = checked_malloc(sizeof(UCLType));
                 type->tag = TYPE_POINTER;
-                type->pointee_type = read_type(p);
+                type->pointee_type = pointee_type;
             }
             break;
         }
@@ -366,12 +370,12 @@ static UCLType *read_type(USE Parser p) {
                 } else {
                     error_at(p, 0, "Array size must be numeric literal");
                 }
-                if (new_alloc) free(type);
+                if (new_alloc) { free(type); new_alloc=false; }
                 return NULL;
         }
 
         if (!advance_on(p, TOKEN_R_SQUARE)) {
-            if (new_alloc) free(type);
+            if (new_alloc) { free(type); new_alloc=false;}
             error_at(p, 0, "Expect ']' after array size.");
             return NULL;
         }
@@ -381,18 +385,24 @@ static UCLType *read_type(USE Parser p) {
         append_chars(&name_buf, sz, (uchar *)suf_buf);
         UCLType *existing = ht_lookup(p->types, as_string(name_buf));
         if (existing) {
-            free(type);
+            if (new_alloc) { free(type); new_alloc=false; }
             type = existing;
         }
     }
 
     cached = ht_lookup(p->types, as_string(name_buf));
     if (cached) {
-        if (new_alloc) free(type);
+        if (new_alloc) {
+
+            free(type);
+            new_alloc=false;
+        }
         free(name_buf.mem);
         type = cached;
     } else {
         ht_set(p->types, as_string(name_buf), type);
+        group_claim(p->ag, type);
+        group_claim(p->ag, name_buf.mem);
     }
 
     return type;
@@ -607,13 +617,17 @@ static UCLExpression *_Nullable unary(USE Parser p) {
 }
 
 static UCLExpression *_Nullable typecast(USE Parser p) {
-    size_t start = p->next_tok_i;
-    UCLExpression *expr = alloc_expr(p);
-    expr->tag = XPR_TYPECAST;
-    expr->type = read_type(p);
+    size_t start = p->next_tok_i - 1;
+    UCLType *type = read_type(p);
+    if (type == NULL) return NULL;
     if (!consume(p, TOKEN_R_CURLY, "Expect '}' after cast type")) {
         return NULL;
     }
+
+    UCLExpression *expr = alloc_expr(p);
+    expr->tag = XPR_TYPECAST;
+    expr->type = type;
+    advance(p);
     expr->type_cast.inner = subexpr(p, XPREC_UNARY);
     expr->span.start = start;
     expr->span.end = p->next_tok_i;
@@ -839,17 +853,26 @@ static Statement var_decl(USE Parser p, Placement plcmnt) {
     stmt.declaration.placement = plcmnt;
     bool type_known = false;
     UCLType *type = NULL;
-    if (peek(p).type == TOKEN_COLON) {
+    if (advance_on(p, TOKEN_COLON)) {
         type_known = true;
         type = read_type(p);
     }
 
-    if (peek(p).type == TOKEN_ASSIGN) {
-        p->next_tok_i++;
+    if (advance_on(p, TOKEN_ASSIGN)) {
+        advance(p);
         stmt.declaration.value = expression(p);
+        if (stmt.declaration.value == NULL) {
+            TODO();
+        }
         if (type_known) {
             if (stmt.declaration.value->type != type) {
                 error_at(p, 0, "Type mismatch");
+                CharBuffer buf = {};
+                write_type(stmt.declaration.value->type, &buf);
+                append_chars(&buf, 5, u8" !=");
+                write_type(type, &buf);
+                append_chars(&buf, 1, u8"\n");
+                write(STDERR_FILENO, buf.mem, buf.size);
             }
         }
         type_known = true;
