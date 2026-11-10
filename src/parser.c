@@ -351,6 +351,7 @@ static UCLType *read_type(USE Parser p) {
             case TOKEN_INT_HEX:
                 size_t len = number_at(p, 0, 64);
                 UCLType *arr = checked_malloc(sizeof(UCLType));
+                new_alloc = true;
                 arr->tag = TYPE_ARRAY;
                 arr->array.member_type = type;
                 arr->array.len = len;
@@ -387,7 +388,7 @@ static UCLType *read_type(USE Parser p) {
 
     cached = ht_lookup(p->types, as_string(name_buf));
     if (cached) {
-        free(type);
+        if (new_alloc) free(type);
         free(name_buf.mem);
         type = cached;
     } else {
