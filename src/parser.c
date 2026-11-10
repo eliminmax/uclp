@@ -447,47 +447,45 @@ static UCLType *_Nonnull array_of(
 }
 
 static UCLExpression *_Nullable array(USE Parser p) {
-    size_t array_start = p->next_tok_i;
-    if (peek(p).type == TOKEN_R_SQUARE) {
+    size_t start = p->next_tok_i - 1;
+    if (advance(p).type == TOKEN_R_SQUARE) {
         error_at(p, 0, "Empty arrays are not supported");
         return NULL;
     }
 
-    size_t array_size = 1;
-    size_t nest_level = 1;
-    while (nest_level) {
-        switch (advance(p).type) {
-            case TOKEN_L_PAREN:
-            case TOKEN_L_SQUARE: ++nest_level; break;
-            case TOKEN_R_PAREN:
-            case TOKEN_R_SQUARE: --nest_level; break;
-            case TOKEN_COMMA:
-                if (nest_level == 1) ++array_size;
-                break;
-            default: break;
-        }
-    }
-    p->next_tok_i = array_start;
-
-    struct array_definition *array = tracked_alloc(
-        p, sizeof(struct array_definition) + sizeof(UCLExpression *[array_size])
-    );
-    array->size = array_size;
-    array->vals[0] = expression(p);
-    array->type = NULL;
-
-    for (size_t i = 1; i < array_size; i++) {
-        p->next_tok_i++; // skip past comma
-        array->vals[i] = expression(p);
-    }
+    size_t cap = 8;
 
     UCLExpression *expr = alloc_expr(p);
     expr->tag = XPR_ARRAY;
-    expr->array = array;
+    size_t alloc_index = p->build_allocs.count;
+    tracked_alloc(
+        p, sizeof(struct array_definition) + sizeof(UCLExpression *[8])
+    );
+
+#define PTR (p->build_allocs.ptrs[alloc_index])
+#define ARR ((struct array_definition *)PTR)
+    ARR->size = 0;
+    ARR->type = NULL;
+    do {
+        if (ARR->size == cap) {
+            cap = new_capacity(cap);
+            PTR = checked_realloc(
+                PTR,
+                sizeof(struct array_definition) + sizeof(UCLExpression *) * cap
+            );
+        }
+        if (!(ARR->vals[ARR->size++] = expression(p))) return NULL;
+    } while (advance_on(p, TOKEN_COMMA) && (advance(p), true));
+
+    if (!consume(p, TOKEN_R_SQUARE, "Expect ']' after array")) return NULL;
+
+    expr->array = PTR;
     expr->type = NULL;
-    expr->span.start = array_start - 1;
+    expr->span.start = start;
     expr->span.end = p->next_tok_i;
     return expr;
+#undef PTR
+#undef ARR
 }
 
 static ucl_i8 parse_char(const char *_Nonnull *const _Nonnull chr) {
