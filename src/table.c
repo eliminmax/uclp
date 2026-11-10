@@ -79,10 +79,10 @@ void *_Nullable ht_lookup(
 }
 
 static void ht_extend_cap(struct hash_table *_Nonnull table) {
-    struct ht_entry *new_alloc = checked_calloc(table->capacity, 2);
+    size_t new_cap = table->capacity * 2;
+    struct ht_entry *new_alloc = checked_calloc(new_cap, sizeof(struct ht_entry));
     struct ht_entry *old_alloc = table->entries;
 
-    size_t new_cap = table->capacity * 2;
     for (size_t i = 0; i < table->capacity; ++i) {
         if (old_alloc[i].status) {
             size_t index = hash_string(old_alloc[i].id) % new_cap;
