@@ -78,7 +78,7 @@ static void *_Nonnull tracked_alloc(USE Parser p, size_t sz) {
 
 #define ALLOCATE(p, t) tracked_alloc((p), sizeof(t))
 
-// helper to allocate new epressions, which explicitly sets the type to NULL
+// helper to allocate new expressions, which explicitly sets the type to NULL
 [[gnu::always_inline, gnu::artificial]] static inline UCLExpression
     *_Nonnull alloc_expr(USE Parser p) {
     UCLExpression *expr = ALLOCATE(p, UCLExpression);
