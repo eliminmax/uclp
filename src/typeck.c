@@ -54,7 +54,7 @@ size_t ucl_sizeof(UCLType *_Nonnull type) {
 
 static void write_type_err(const UCLType *_Nonnull t);
 
-void write_type(const UCLType *type, CharBuffer *buf) {
+void write_type(const UCLType *_Nonnull type, CharBuffer *buf) {
     switch (type->tag) {
         case TYPE_POINTER:
             if (type->pointee_type) {
