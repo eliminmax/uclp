@@ -320,9 +320,7 @@ static UCLType *read_type(USE Parser p) {
                 type = ht_lookup(p->types, (String){8, "*dynamic"});
             } else {
                 UCLType *pointee_type = read_type(p);
-                if (pointee_type == NULL) {
-                    return NULL;
-                }
+                if (pointee_type == NULL) return NULL;
                 new_alloc = true;
                 type = checked_malloc(sizeof(UCLType));
                 type->tag = TYPE_POINTER;
@@ -403,9 +401,8 @@ static UCLType *read_type(USE Parser p) {
     cached = ht_lookup(p->types, as_string(name_buf));
     if (cached) {
         if (new_alloc) {
-
             free(type);
-            new_alloc=false;
+            new_alloc = false;
         }
         free(name_buf.mem);
         type = cached;
@@ -873,7 +870,7 @@ static Statement var_decl(USE Parser p, Placement plcmnt) {
     if (advance_on(p, TOKEN_COLON)) {
         type = read_type(p);
         if (type == NULL) {
-            stmt.tag=STMT_UNPARSABLE;
+            stmt.tag = STMT_UNPARSABLE;
             goto end;
         }
         type_known = true;
@@ -883,7 +880,7 @@ static Statement var_decl(USE Parser p, Placement plcmnt) {
         advance(p);
         stmt.declaration.value = expression(p);
         if (stmt.declaration.value == NULL) {
-            stmt.tag=STMT_UNPARSABLE;
+            stmt.tag = STMT_UNPARSABLE;
             goto end;
         }
         if (type_known) {
@@ -1357,6 +1354,7 @@ void dbg_stmt_inner(
 
     switch (stmt->tag) {
         case STMT_UNPARSABLE: FIXED("UNPARSABLE\n"); break;
+
         case STMT_BLOCK: {
             FIXED("Block: {\n");
             auto block = stmt->block;
@@ -1434,12 +1432,15 @@ void dbg_stmt_inner(
         }
 
         case STMT_RETURN: TODO();
+
         case STMT_EXPR: {
             FIXED("Expr:\n");
             dbg_expr_inner(p, stmt->expr, buf, indent + 1);
             break;
         }
+
         case STMT_BREAK: TODO();
+
         case STMT_VAR_DEC: {
             auto dec = &stmt->declaration;
             FIXED("Declare ");
@@ -1463,6 +1464,7 @@ void dbg_stmt_inner(
 
             break;
         }
+
         case STMT_FUN_DEC: TODO();
         case STMT_EXTERN_VAR: TODO();
         case STMT_EXTERN_FUN: TODO();
