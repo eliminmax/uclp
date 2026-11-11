@@ -19,6 +19,11 @@
 #include "table.h"
 #include "todo.h"
 
+typedef UCLType *_Nullable (*UnaryResolver)(TypeckCtx, UCLExpression *_Nonnull);
+typedef UCLType *_Nullable (*BinaryResolver)(
+    TypeckCtx, UCLExpression *_Nonnull, UCLExpression *_Nonnull
+);
+
 // Approximation of digits in SIZE_MAX, adapted from chux's StackOverflow answer
 // (see https://stackoverflow.com/a/43788824)
 constexpr size_t MAX_SIZE_DIGITS = ((sizeof(size_t) * CHAR_BIT) * 28 / 93 + 2);
@@ -155,7 +160,7 @@ static bool typeck_unary(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
     REQUIRE(expr->tag == XPR_UNARY);
     struct unary_expression *unary = &expr->unary;
     typeck_expr(ctx, expr->unary.operand);
-    REQUIRE(unary->operand->type != nullptr);
+    REQUIRE(unary->operand->type != NULL);
     UCLType *_Nonnull inner_type = unary->operand->type;
     switch (unary->op) {
         case TOKEN_REF:
@@ -166,15 +171,17 @@ static bool typeck_unary(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
         case TOKEN_BIT_AND: return expr->type = pointer_to(ctx, inner_type);
 
         case TOKEN_LOGICAL_NOT:
-            if (!is_numeric(inner_type) && inner_type->tag != TYPE_POINTER) {
+            if (!is_numeric(inner_type) && inner_type->tag != TYPE_POINTER)
+                [[clang::unlikely]] {
                 fputs("Error: logical can't be perfomed on ", stderr);
                 write_type_err(inner_type);
                 fputs(
-                    ". (Supported types are integral types and pointers).\n",
+                    ". (Supported types are integer types and pointers).\n",
                     stderr
                 );
                 return false;
             }
+            expr->type = ht_lookup(ctx.types, (String){2, "i8"});
 
         case TOKEN_BIT_NOT:
             if (!ensure_numeric("bitwise not", expr->type, 0)) return false;
@@ -323,32 +330,36 @@ static bool typeck_bin(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
     };
 
     switch (expr->binary.op) {
-        case TOKEN_PLUS: TODO();
-        case TOKEN_MINUS: TODO();
-        case TOKEN_MUL: TODO();
+        case TOKEN_PLUS:
+        case TOKEN_MINUS:
+        case TOKEN_MUL:
         case TOKEN_SIGNED_MUL: TODO();
-        case TOKEN_DIV: TODO();
-        case TOKEN_MOD: TODO();
-        case TOKEN_SIGNED_DIV: TODO();
+
+        case TOKEN_DIV:
+        case TOKEN_MOD:
+        case TOKEN_SIGNED_DIV:
         case TOKEN_SIGNED_MOD: TODO();
-        case TOKEN_EQ: TODO();
-        case TOKEN_NE: TODO();
-        case TOKEN_LT: TODO();
-        case TOKEN_GT: TODO();
-        case TOKEN_LE: TODO();
-        case TOKEN_GE: TODO();
-        case TOKEN_SIGNED_LT: TODO();
-        case TOKEN_SIGNED_GT: TODO();
-        case TOKEN_SIGNED_LE: TODO();
-        case TOKEN_SIGNED_GE: TODO();
-        case TOKEN_LOGICAL_AND: TODO();
+
+        case TOKEN_EQ:
+        case TOKEN_NE:
+        case TOKEN_LT:
+        case TOKEN_GT:
+        case TOKEN_LE:
+        case TOKEN_GE:
+        case TOKEN_SIGNED_LT:
+        case TOKEN_SIGNED_GT:
+        case TOKEN_SIGNED_LE:
+        case TOKEN_SIGNED_GE:
+        case TOKEN_LOGICAL_AND:
         case TOKEN_LOGICAL_OR: TODO();
-        case TOKEN_BIT_NOT: TODO();
-        case TOKEN_BIT_AND: TODO();
-        case TOKEN_BIT_OR: TODO();
+
+        case TOKEN_BIT_NOT:
+        case TOKEN_BIT_AND:
+        case TOKEN_BIT_OR:
         case TOKEN_BIT_XOR: TODO();
-        case TOKEN_SHR_LOG: TODO();
-        case TOKEN_SHR_ARITH: TODO();
+
+        case TOKEN_SHR_LOG:
+        case TOKEN_SHR_ARITH:
         case TOKEN_SHL: TODO();
         default:
             UNREACHABLE("Parser would not have generated AST with invalid op");
@@ -356,17 +367,51 @@ static bool typeck_bin(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
 }
 
 bool typeck_expr(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
+    if (expr->typechecked) return true;
+
     switch (expr->tag) {
         case XPR_VAR: // handled by type_of_binding in parser
             [[fallthrough]];
-        case XPR_LITERAL: REQUIRE(expr->type != NULL); return true;
-        case XPR_UNARY: return typeck_unary(ctx, expr);
-        case XPR_BINARY: TODO();
+        case XPR_LITERAL:
+            REQUIRE(expr->type != NULL);
+            return expr->typechecked = true;
+        case XPR_UNARY: return expr->typechecked = typeck_unary(ctx, expr);
+        case XPR_BINARY: return expr->typechecked = typeck_bin(ctx, expr);
         case XPR_FUNC_CALL: TODO();
-        case XPR_GROUP: TODO();
-        case XPR_TYPECAST: TODO();
-        case XPR_ARRAY: TODO();
-        case XPR_ASSIGN: TODO();
+        case XPR_GROUP:
+            if (!typeck_expr(ctx, expr->grouped)) return false;
+            expr->type = expr->grouped->type;
+            return expr->typechecked = true;
+        case XPR_TYPECAST: {
+            REQUIRE(expr->type != NULL);
+
+            if (!typeck_expr(ctx, expr->type_cast.inner)) return false;
+            // TODO: Check cast compatibility
+            return true;
+        }
+        case XPR_ARRAY: {
+            auto array = expr->array;
+            REQUIRE(array->type == NULL && expr->type == NULL);
+            for (size_t i = 0; i < array->size; i++) {
+                if (!typeck_expr(ctx, array->vals[i])) return false;
+                if (i && array->vals[i]->type != array->vals[0]->type) {
+                    fputs("Error: array contains both ", stderr);
+                    write_type_err(array->vals[0]->type);
+                    fputs(" and ", stderr);
+                    write_type_err(array->vals[i]->type);
+                    fputs(".\n", stderr);
+                    return false;
+                }
+            }
+            TODO();
+        }
+        case XPR_ASSIGN:
+            auto assign = expr->assign;
+            typeck_expr(ctx, assign.place);
+            typeck_expr(ctx, assign.value);
+            // TODO: check assignment type compatibility
+            expr->type = assign.place->type;
+            return expr->typechecked = true;
         case XPR_INDEX: TODO();
     }
 }

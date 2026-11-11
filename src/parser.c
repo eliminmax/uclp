@@ -612,6 +612,15 @@ static UCLExpression *_Nullable ident(USE Parser p) {
     expr->tag = XPR_VAR;
     expr->var_name = intern(p->idents, tok.lexeme);
     expr->type = type_of_binding(p, &p->current_vars, expr->var_name);
+    if (expr->type == NULL) {
+        CharBuffer buf = {};
+        append_chars(&buf, expr->var_name->len, (const uchar *)expr->var_name->text);
+        append_chars(&buf, 1, u8"");
+        error_at(p, 0, "Unknown variable '%s'", buf.mem);
+        free(buf.mem);
+        return NULL;
+    }
+
     expr->span.start = p->next_tok_i - 1;
     expr->span.end = p->next_tok_i;
     return expr;

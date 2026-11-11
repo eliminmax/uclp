@@ -35,6 +35,7 @@ typedef struct expression {
         XPR_ASSIGN,
         XPR_INDEX,
     );
+    bool typechecked;
 
     union {
         struct unary_expression {
