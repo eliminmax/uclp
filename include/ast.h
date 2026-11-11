@@ -148,6 +148,8 @@ typedef struct statement {
         } foreach_loop;
 
         struct expression *_Nonnull expr;
+        struct expression *_Nullable return_value;
+        String *_Nullable break_label;
         struct function_decl *_Nonnull fun_dec;
     };
 
