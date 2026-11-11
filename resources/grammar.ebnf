@@ -114,7 +114,7 @@ if = "if", sp, "(", sp, EXPR, ")", sp, STMT, { "else", sp, STMT } ;
 
 loop name = [identifier, sp, ":", sp, ];
 while = loop name, "while", sp, "(", sp, EXPR, ")", sp, STMT ;
-foreach = loop name, "foreach", sp, "(", identifier, sp, "in", sp, ;
+foreach = loop name, "foreach", sp, "(", identifier, sp, "in", sp, EXPR ")", sp STMT;
 
 return = "return", sp, [ EXPR ], ";" ;
 break = "break", sp, [ identifier, sp ], ";" ;
