@@ -1029,9 +1029,66 @@ static Statement expr_stmt(USE Parser p) {
     return stmt;
 }
 
-static Statement while_stmt(USE Parser p) { TODO(p); }
+static Statement while_stmt(USE Parser p, String *_Nullable label) {
+    size_t start = label ? p->next_tok_i - 3 : p->next_tok_i - 1;
+    if (!consume(p, TOKEN_L_PAREN, "Expect '(' before loop condition"))
+        goto err;
+    UCLExpression *cond = expression(p);
+    if (!cond) goto err;
+    if (!consume(p, TOKEN_R_PAREN, "Expect ')' after loop condition")) goto err;
 
-static Statement foreach_stmt(USE Parser p) { TODO(p); }
+    Statement *body = ALLOCATE(p, Statement);
+    *body = get_statement(p);
+    if (body->tag == STMT_UNPARSABLE) goto err;
+
+    return (Statement){
+        .tag = STMT_WHILE,
+        .while_loop = {
+            .label = label,
+            .cond = cond,
+            .body = body,
+        }
+    };
+
+err:
+    return (Statement){
+        .tag = STMT_UNPARSABLE, .span = {.start = start, .end = p->next_tok_i}
+    };
+}
+
+static Statement foreach_stmt(USE Parser p, String *_Nullable label) {
+    size_t start = label ? p->next_tok_i - 3 : p->next_tok_i - 1;
+    if (!consume(p, TOKEN_L_PAREN, "Expect '(' before loop ")) goto err;
+    String iter_var = current(p).lexeme;
+    if (!consume(p, TOKEN_IDENT, "Expect iteration name")) goto err;
+
+    if (!consume(p, TOKEN_IN, "Expect 'in' after iteration name")) goto err;
+    advance(p);
+    UCLExpression *array = expression(p);
+    if (!consume(p, TOKEN_R_PAREN, "Expect ')' after iterable ")) goto err;
+    if (!array) goto err;
+
+    Statement *body = ALLOCATE(p, Statement);
+    *body = get_statement(p);
+    if (body->tag == STMT_UNPARSABLE) goto err;
+
+    return (Statement){
+        .tag = STMT_FOREACH,
+        .span = {.start = start, .end = p->next_tok_i},
+        .foreach_loop = {
+            .label = label,
+            .iter_var = iter_var,
+            .array = array,
+            .body = body,
+        }
+    };
+
+err:
+    return (Statement){
+        .tag = STMT_UNPARSABLE,
+        .span = {.start = start, .end = p->next_tok_i},
+    };
+}
 
 [[gnu::cold]]
 static void resync(USE Parser p) {
@@ -1062,8 +1119,25 @@ Statement get_statement(USE Parser p) {
         case TOKEN_STATIC: s = var_decl(p, STORE_STATIC); break;
         case TOKEN_IF: s = cond_stmt(p); break;
         case TOKEN_L_CURLY: s = block_stmt(p); break;
-        case TOKEN_WHILE: s = while_stmt(p); break;
-        case TOKEN_FOREACH: s = foreach_stmt(p); break;
+        case TOKEN_WHILE: s = while_stmt(p, NULL); break;
+        case TOKEN_FOREACH: s = foreach_stmt(p, NULL); break;
+        case TOKEN_IDENT:
+            String *_Nonnull label =
+                intern(p->idents, p->tokens[p->next_tok_i - 1].lexeme);
+            if (advance_on(p, TOKEN_COLON)) {
+                if (advance_on(p, TOKEN_FOREACH)) {
+                    s = foreach_stmt(p, label);
+                    break;
+                } else if (advance_on(p, TOKEN_WHILE)) {
+                    s = while_stmt(p, label);
+                    break;
+                } else {
+                    error_at(p, -1, "Labels are only supported on loops.");
+                }
+            } else {
+                [[fallthrough]];
+            }
+
         default: s = expr_stmt(p); break;
     }
 
