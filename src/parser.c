@@ -886,9 +886,12 @@ static Statement var_decl(USE Parser p, Placement plcmnt) {
         if (type_known) {
             if (stmt.declaration.value->type != type) {
                 CharBuffer buf = {};
+                // don't use "%.*s" for size_t-specified size to avoid overflow
                 write_type(type, &buf);
                 append_chars(&buf, 31, u8" with an initial value of type ");
                 write_type(stmt.declaration.value->type, &buf);
+
+                // NULL terminate the message
                 append_chars(&buf, 1, u8"");
                 error_at(p, 0, "Type mismatch: declared a %s", buf.mem);
                 free(buf.mem);
