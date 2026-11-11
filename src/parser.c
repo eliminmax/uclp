@@ -371,12 +371,18 @@ static UCLType *read_type(USE Parser p) {
                 } else {
                     error_at(p, 0, "Array size must be numeric literal");
                 }
-                if (new_alloc) { free(type); new_alloc=false; }
+                if (new_alloc) {
+                    free(type);
+                    new_alloc = false;
+                }
                 return NULL;
         }
 
         if (!advance_on(p, TOKEN_R_SQUARE)) {
-            if (new_alloc) { free(type); new_alloc=false;}
+            if (new_alloc) {
+                free(type);
+                new_alloc = false;
+            }
             error_at(p, 0, "Expect ']' after array size.");
             return NULL;
         }
@@ -386,7 +392,10 @@ static UCLType *read_type(USE Parser p) {
         append_chars(&name_buf, sz, (uchar *)suf_buf);
         UCLType *existing = ht_lookup(p->types, as_string(name_buf));
         if (existing) {
-            if (new_alloc) { free(type); new_alloc=false; }
+            if (new_alloc) {
+                free(type);
+                new_alloc = false;
+            }
             type = existing;
         }
     }
