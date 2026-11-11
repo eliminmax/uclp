@@ -89,6 +89,7 @@ static void *_Nonnull tracked_alloc(USE Parser p, size_t sz) {
 [[gnu::cold, gnu::format(__printf__, 3, 4)]]
 static void error_at(USE Parser p, ssize_t offset, const char *fmt, ...) {
     REQUIRE(offset >= 0 || (size_t)(-offset) < p->next_tok_i);
+    if (p->panicking) return;
     p->panicking = true;
     Token t = p->tokens[p->next_tok_i - 1 + offset];
 
