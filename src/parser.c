@@ -1011,7 +1011,7 @@ end:
 }
 
 static Statement expr_stmt(USE Parser p) {
-    UCLExpression *_Nonnull expr = expression(p);
+    UCLExpression *expr = expression(p);
     Statement stmt = {.tag = STMT_EXPR};
     if (expr) {
         stmt = (Statement){
