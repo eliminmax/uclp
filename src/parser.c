@@ -557,19 +557,23 @@ static UCLExpression *_Nonnull literal(USE Parser p) {
             switch ((ty - TOKEN_INT_BIN) % 5) {
                 case 1:
                     expr->literal.tag = LIT_I8;
+                    expr->type = ht_lookup(p->types, (String){2, "i8"});
                     expr->literal._i8.u = value;
                     return expr;
                 case 2:
                     expr->literal.tag = LIT_I16;
+                    expr->type = ht_lookup(p->types, (String){3, "i16"});
                     expr->literal._i16.u = value;
                     return expr;
                 case 0:
                 case 3:
                     expr->literal.tag = LIT_I32;
+                    expr->type = ht_lookup(p->types, (String){3, "i32"});
                     expr->literal._i32.u = value;
                     return expr;
                 case 4:
                     expr->literal.tag = LIT_I64;
+                    expr->type = ht_lookup(p->types, (String){3, "i64"});
                     expr->literal._i64.u = value;
                     return expr;
                 default: UNREACHABLE("Modulo operation");
@@ -857,28 +861,34 @@ static Statement var_decl(USE Parser p, Placement plcmnt) {
     bool type_known = false;
     UCLType *type = NULL;
     if (advance_on(p, TOKEN_COLON)) {
-        type_known = true;
         type = read_type(p);
+        if (type == NULL) {
+            stmt.tag=STMT_UNPARSABLE;
+            goto end;
+        }
+        type_known = true;
     }
 
     if (advance_on(p, TOKEN_ASSIGN)) {
         advance(p);
         stmt.declaration.value = expression(p);
         if (stmt.declaration.value == NULL) {
-            TODO();
+            stmt.tag=STMT_UNPARSABLE;
+            goto end;
         }
         if (type_known) {
             if (stmt.declaration.value->type != type) {
-                error_at(p, 0, "Type mismatch");
                 CharBuffer buf = {};
-                write_type(stmt.declaration.value->type, &buf);
-                append_chars(&buf, 5, u8" !=");
                 write_type(type, &buf);
-                append_chars(&buf, 1, u8"\n");
-                write(STDERR_FILENO, buf.mem, buf.size);
+                append_chars(&buf, 31, u8" with an initial value of type ");
+                write_type(stmt.declaration.value->type, &buf);
+                append_chars(&buf, 1, u8"");
+                error_at(p, 0, "Type mismatch: declared a %s", buf.mem);
+                free(buf.mem);
             }
+        } else if ((type = stmt.declaration.value->type) != NULL) {
+            type_known = true;
         }
-        type_known = true;
     } else {
         stmt.declaration.value = NULL;
     }
@@ -1116,7 +1126,9 @@ static void dbg_expr_inner(
 
     switch (expr->tag) {
         case XPR_LITERAL:
-            FIXED("Literal `");
+            FIXED("Literal ");
+            write_type(expr->type, buf);
+            FIXED(" `");
             append_chars(buf, end - start, (const uchar *)start);
             FIXED("`");
             break;
