@@ -1365,10 +1365,74 @@ void dbg_stmt_inner(
             }
             write_indent(buf, indent);
             FIXED("}");
+            break;
         }
-        case STMT_IF: TODO();
-        case STMT_WHILE: TODO();
-        case STMT_FOREACH: TODO();
+
+        case STMT_IF: {
+            FIXED("If\n");
+            write_indent(buf, indent + 1);
+            FIXED("Condition:\n");
+            dbg_expr_inner(p, stmt->conditional.cond, buf, indent + 2);
+            write_indent(buf, indent + 1);
+            FIXED("Then:\n");
+            dbg_stmt_inner(p, stmt->conditional.if_body, buf, indent + 2);
+            if (stmt->conditional.else_body) {
+                write_indent(buf, indent + 1);
+                FIXED("Else:\n");
+                dbg_stmt_inner(p, stmt->conditional.else_body, buf, indent + 2);
+            }
+            break;
+        }
+
+        case STMT_WHILE: {
+            FIXED("While\n");
+            auto _while = &stmt->while_loop;
+            if (_while->label) {
+                write_indent(buf, indent + 1);
+                FIXED("Label: ");
+                append_chars(
+                    buf, _while->label->len, (const uchar *)_while->label->text
+                );
+                FIXED("\n");
+            }
+            write_indent(buf, indent + 1);
+            FIXED("Condition:\n");
+            dbg_expr_inner(p, _while->cond, buf, indent + 2);
+            write_indent(buf, indent + 1);
+            break;
+        }
+
+        case STMT_FOREACH: {
+            auto foreach = &stmt->foreach_loop;
+            FIXED("Foreach\n");
+            if (foreach->label) {
+                write_indent(buf, indent + 1);
+                FIXED("Label: ");
+                append_chars(
+                    buf,
+                    foreach->label->len,
+                    (const uchar *)foreach->label->text
+                );
+                FIXED("\n");
+            }
+            write_indent(buf, indent + 1);
+            FIXED("Iter Var: \"");
+            append_chars(
+                buf,
+                foreach->iter_var.len,
+                (const uchar *)foreach->iter_var.text
+            );
+            FIXED("\"\n");
+            write_indent(buf, indent + 1);
+            FIXED("Iterating over:\n");
+            dbg_expr_inner(p, foreach->array, buf, indent + 2);
+            FIXED("\n");
+            write_indent(buf, indent + 1);
+            FIXED("Body:\n");
+            dbg_stmt_inner(p, foreach->body, buf, indent + 2);
+            break;
+        }
+
         case STMT_RETURN: TODO();
         case STMT_EXPR: {
             FIXED("Expr:\n");
