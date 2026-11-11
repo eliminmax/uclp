@@ -135,14 +135,16 @@ typedef struct statement {
         } conditional;
 
         struct {
+            String *_Nullable label;
             struct expression *_Nonnull cond;
-            struct block *_Nonnull body;
+            struct statement *_Nonnull body;
         } while_loop;
 
         struct {
+            String *_Nullable label;
             String iter_var;
-            struct array *_Nonnull array;
-            struct block *_Nonnull body;
+            struct expression *_Nonnull array;
+            struct statement *_Nonnull body;
         } foreach_loop;
 
         struct expression *_Nonnull expr;
