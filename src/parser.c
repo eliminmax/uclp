@@ -1434,7 +1434,17 @@ void dbg_stmt_inner(
             break;
         }
 
-        case STMT_RETURN: TODO();
+        case STMT_RETURN: {
+            UCLExpression *_Nullable ret = stmt->return_value;
+            if (ret) {
+                FIXED("Return `");
+                dbg_expr_inner(p, ret, buf, indent + 1);
+                FIXED("`\n");
+            } else {
+                FIXED("Return\n");
+            }
+            break;
+        }
 
         case STMT_EXPR: {
             FIXED("Expr:\n");
@@ -1442,7 +1452,16 @@ void dbg_stmt_inner(
             break;
         }
 
-        case STMT_BREAK: TODO();
+        case STMT_BREAK: {
+            String *label = stmt->break_label;
+            if (label) {
+                FIXED("Break \"");
+                append_chars(buf, label->len, (const uchar *)label->text);
+                FIXED("\"\n");
+            } else {
+                FIXED("Break\n");
+            }
+        }
 
         case STMT_VAR_DEC: {
             auto dec = &stmt->declaration;
