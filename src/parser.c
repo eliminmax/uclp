@@ -1068,6 +1068,10 @@ static Statement foreach_stmt(USE Parser p, String *_Nullable label) {
     if (!consume(p, TOKEN_R_PAREN, "Expect ')' after iterable ")) goto err;
     if (!array) goto err;
 
+#ifdef TYPE_CHECKING
+    TODO();
+#endif
+
     Statement *body = ALLOCATE(p, Statement);
     *body = get_statement(p);
     if (body->tag == STMT_UNPARSABLE) goto err;
@@ -1152,7 +1156,10 @@ Statement get_statement(USE Parser p) {
         while (p->build_allocs.count > ba_ct) {
             group_claim(p->ag, p->build_allocs.ptrs[--p->build_allocs.count]);
         }
-        // typeck_stmt((TypeckCtx){.ag = p->ag, .types = p->types}, &s);
+
+#ifdef TYPE_CHECKING
+        typeck_stmt((TypeckCtx){.ag = p->ag, .types = p->types}, &s);
+#endif
     }
 
     return s;
