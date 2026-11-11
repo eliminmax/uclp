@@ -439,16 +439,19 @@ static UCLType *_Nonnull array_of(
     char numbuf[MAX_SIZE_DIGITS + 3];
     size_t sz = sprintf(numbuf, "[%zu]", len);
     append_chars(&name, sz, (uchar *)numbuf);
-    String key = (String){name.size, (char *)name.mem};
+    String key = as_string(name);
     UCLType *type = ht_lookup(p->types, key);
-    if (!type) {
+    if (type) {
+        free(name.mem);
+    } else {
         type = checked_malloc(sizeof(UCLType));
         type->tag = TYPE_ARRAY;
         type->array.len = len;
         type->array.member_type = mem_type;
         ht_set(p->types, key, type);
+        group_claim(p->ag, name.mem);
+        group_claim(p->ag, type);
     }
-    free(name.mem);
     return type;
 }
 
