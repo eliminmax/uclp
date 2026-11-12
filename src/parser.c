@@ -590,8 +590,8 @@ static UCLExpression *_Nonnull literal(USE Parser p) {
 }
 
 static UCLExpression *_Nullable grouping(USE Parser p) {
+    size_t start = p->next_tok_i - 1;
     advance(p);
-    size_t start = p->next_tok_i;
     UCLExpression *grouped = expression(p);
     if (!consume(
             p, TOKEN_R_PAREN, "Expected ')' after parenthesized expression"
