@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-#include "typeck.h"
-
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -15,9 +13,11 @@
 #include "lang/types.h"
 #include "mem/checked.h"
 #include "mem/dynarray.h"
+#include "printerr.h"
 #include "safety.h"
 #include "table.h"
 #include "todo.h"
+#include "typeck.h"
 
 typedef UCLType *_Nullable (*UnaryResolver)(TypeckCtx, UCLExpression *_Nonnull);
 typedef UCLType *_Nullable (*BinaryResolver)(
@@ -26,7 +26,8 @@ typedef UCLType *_Nullable (*BinaryResolver)(
 
 // Approximation of digits in SIZE_MAX, adapted from chux's StackOverflow answer
 // (see https://stackoverflow.com/a/43788824)
-constexpr size_t MAX_SIZE_DIGITS = ((sizeof(size_t) * CHAR_BIT) * 28 / 93 + 2);
+static constexpr size_t MAX_SIZE_DIGITS =
+    ((sizeof(size_t) * CHAR_BIT) * 28 / 93 + 2);
 
 Alignment ucl_alignof(const UCLType *_Nonnull type) {
     switch (type->tag) {
@@ -125,6 +126,30 @@ UCLType *_Nonnull pointer_to(TypeckCtx ctx, UCLType *_Nonnull type) {
     return t;
 }
 
+UCLType *_Nonnull array_of(
+    TypeckCtx ctx, size_t len, UCLType *_Nonnull mem_type
+) {
+    CharBuffer name = {};
+    write_type(mem_type, &name);
+    char numbuf[MAX_SIZE_DIGITS + 3];
+    size_t sz = sprintf(numbuf, "[%zu]", len);
+    append_chars(&name, sz, (uchar *)numbuf);
+    String key = as_string(name);
+    UCLType *type = ht_lookup(ctx.types, key);
+    if (type) {
+        free(name.mem);
+    } else {
+        type = checked_malloc(sizeof(UCLType));
+        type->tag = TYPE_ARRAY;
+        type->array.len = len;
+        type->array.member_type = mem_type;
+        ht_set(ctx.types, key, type);
+        group_claim(ctx.ag, name.mem);
+        group_claim(ctx.ag, type);
+    }
+    return type;
+}
+
 [[gnu::cold]]
 static void write_type_err(const UCLType *_Nonnull t) {
     static const char *TYPE_HL, *HL_END;
@@ -137,6 +162,7 @@ static void write_type_err(const UCLType *_Nonnull t) {
     if (*TYPE_HL) fputs(TYPE_HL, stderr);
     fwrite(buf.mem, 1, buf.size, stderr);
     if (*HL_END) fputs(HL_END, stderr);
+    free(buf.mem);
 }
 
 extern inline bool is_numeric(const UCLType *_Nonnull);
@@ -253,90 +279,56 @@ static bool typeck_unary(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
     }
 }
 
-static bool bin_same_type(
-    const char *op, size_t line, const UCLType *_Nonnull types[2]
-) {
-    if (types[0] == types[1]) [[clang::likely]]
-        return true;
-
-    fprintf(
-        stderr,
-        "Error [line %zu]: operator '%s' requires LHS and RHS to have the same "
-        "type, but LHS is ",
-        line,
-        op
-    );
-    write_type_err(types[0]);
-    fputs(", and RHS is ", stderr);
-    write_type_err(types[1]);
-    fputs(".\n", stderr);
-
-    return false;
-}
-
-static bool ensure_both_numeric(
-    const char *op, size_t line, const UCLType *_Nonnull types[2]
-) {
-    bool ret = true;
-    if (!is_numeric(types[0])) [[clang::unlikely]] {
-        fprintf(
-            stderr,
-            "Error [line %zu]: %s requires numeric operands, but LHS is ",
-            line,
-            op
-        );
-        write_type_err(types[0]);
-        fputs(".\n", stderr);
-        ret = false;
-    }
-    if (!is_numeric(types[1])) [[clang::unlikely]] {
-        fprintf(
-            stderr,
-            "Erorr [line %zu]: %s requires numeric operands, but RHS is ",
-            line,
-            op
-        );
-        write_type_err(types[0]);
-        fputs(".\n", stderr);
-        ret = false;
-    }
-    return ret;
-}
-
-static enum ucl_type_tag bin_larger_numeric(
-    const char *op, size_t line, const UCLType *_Nonnull types[2]
-) {
-    if (ensure_numeric(op, types[0], line) &&
-        ensure_numeric(op, types[1], line)) [[clang::likely]] {
-        return types[0]->tag >= types[1]->tag ? types[0]->tag : types[1]->tag;
-    }
-
-    return TYPE_UNINHABITED;
-}
-
 static bool typeck_bin(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
     REQUIRE(expr->tag == XPR_BINARY);
-    REQUIRE(expr->binary.lhs->type != nullptr);
-    REQUIRE(expr->binary.rhs->type != nullptr);
+    REQUIRE(expr->binary.lhs->type != NULL);
+    REQUIRE(expr->binary.rhs->type != NULL);
 
-    UCLType *_Nonnull types[2] = {
-        expr->binary.lhs->type,
-        expr->binary.rhs->type,
-    };
+    UCLType *_Nonnull lhs = expr->binary.lhs->type;
+    UCLType *_Nonnull rhs = expr->binary.rhs->type;
 
     switch (expr->binary.op) {
         case TOKEN_PLUS:
         case TOKEN_MINUS:
+            if ((is_numeric(lhs) && rhs->tag == TYPE_POINTER) ||
+                (lhs->tag == TYPE_POINTER && is_numeric(rhs))) {
+                TODO("Pointer arithmetic not yet implemented");
+            }
+            [[fallthrough]];
         case TOKEN_MUL:
-        case TOKEN_SIGNED_MUL: TODO();
-
+        case TOKEN_SIGNED_MUL:
         case TOKEN_DIV:
         case TOKEN_MOD:
         case TOKEN_SIGNED_DIV:
-        case TOKEN_SIGNED_MOD: TODO();
+        case TOKEN_SIGNED_MOD:
+            if (!is_numeric(lhs)) [[clang::unlikely]] {
+                fputs("Can't perform arithmetic on ", stderr);
+                write_type_err(lhs);
+                fputs(".\n", stderr);
+                return false;
+            }
+            if (lhs != rhs) [[clang::unlikely]] { goto mismatch; }
+            expr->type = lhs;
+            return true;
 
         case TOKEN_EQ:
         case TOKEN_NE:
+            if (lhs != rhs) [[clang::unlikely]] { goto mismatch; }
+            switch (lhs->tag) {
+                case TYPE_POINTER:
+                case TYPE_I8:
+                case TYPE_I16:
+                case TYPE_I32:
+                case TYPE_I64:
+                    goto return_bool;
+
+                [[clang::unlikely]] default:
+                    fputs("Equality checks not supported for ", stderr);
+                    write_type_err(lhs);
+                    fputs(".\n", stderr);
+                    return false;
+            }
+
         case TOKEN_LT:
         case TOKEN_GT:
         case TOKEN_LE:
@@ -345,30 +337,99 @@ static bool typeck_bin(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
         case TOKEN_SIGNED_GT:
         case TOKEN_SIGNED_LE:
         case TOKEN_SIGNED_GE:
+            if (lhs != rhs) {
+                if (lhs->tag != TYPE_POINTER || rhs->tag != TYPE_POINTER)
+                    [[clang::unlikely]] {
+                    fputs(
+                        "Can only order 2 integers of the same size or 2 "
+                        "pointers.",
+                        stderr
+                    );
+                    return false;
+                }
+            }
+
+            expr->type = ht_lookup(ctx.types, (String){2, "i8"});
+            REQUIRE(expr->type);
+            return true;
+
         case TOKEN_LOGICAL_AND:
-        case TOKEN_LOGICAL_OR: TODO();
+        case TOKEN_LOGICAL_OR: {
+            if ((is_numeric(lhs) || lhs->tag == TYPE_POINTER)) {
+                if (is_numeric(rhs) || rhs->tag == TYPE_POINTER) {
+                    expr->type = rhs;
+                    return true;
+                } else {
+                    fputs("Can't use ", stderr);
+                    write_type_err(rhs);
+                    fputs(" as a boolean value.\n", stderr);
+                    return false;
+                }
+            } else {
+                fputs("Can't use ", stderr);
+                write_type_err(lhs);
+                fputs(" as a boolean value.\n", stderr);
+                return false;
+            }
+        }
 
         case TOKEN_BIT_NOT:
         case TOKEN_BIT_AND:
         case TOKEN_BIT_OR:
-        case TOKEN_BIT_XOR: TODO();
+        case TOKEN_BIT_XOR:
+            if (!is_numeric(lhs)) {
+                fputs("Can't perform bitwise operations on ", stderr);
+                write_type_err(lhs);
+                fputs(".\n", stderr);
+                return false;
+            }
+            if (lhs != rhs) [[clang::unlikely]] { goto mismatch; }
+            expr->type = lhs;
+            return true;
 
         case TOKEN_SHR_LOG:
         case TOKEN_SHR_ARITH:
-        case TOKEN_SHL: TODO();
+        case TOKEN_SHL:
+            if (!is_numeric(lhs)) {
+                fputs("Can't perform bit shift operations on ", stderr);
+                write_type_err(lhs);
+                fputs(".\n", stderr);
+                return false;
+            }
+            if (!is_numeric(rhs)) {
+                fputs("Shift amount must be a number, not ", stderr);
+                write_type_err(rhs);
+                fputs(".\n", stderr);
+                return false;
+            }
+            expr->type = lhs;
+            return true;
         default:
             UNREACHABLE("Parser would not have generated AST with invalid op");
     }
+
+return_bool:
+    expr->type = ht_lookup(ctx.types, (String){2, "i8"});
+    REQUIRE(expr->type);
+    return true;
+
+mismatch:
+    fputs(
+        "Operator requires LHS and RHS to have the same type, but LHS is ",
+        stderr
+    );
+    write_type_err(lhs);
+    fputs(", and RHS is ", stderr);
+    write_type_err(rhs);
+    fputs(".\n", stderr);
+    return false;
 }
 
 bool typeck_expr(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
-
     switch (expr->tag) {
         case XPR_VAR: // handled by type_of_binding in parser
             [[fallthrough]];
-        case XPR_LITERAL:
-            REQUIRE(expr->type != NULL);
-            return true;
+        case XPR_LITERAL: REQUIRE(expr->type != NULL); return true;
         case XPR_UNARY: return typeck_unary(ctx, expr);
         case XPR_BINARY: return typeck_bin(ctx, expr);
         case XPR_FUNC_CALL: TODO();
@@ -384,7 +445,17 @@ bool typeck_expr(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
         }
         case XPR_ARRAY: {
             auto array = expr->array;
-            REQUIRE(array->type == NULL && expr->type == NULL);
+            REQUIRE(array->size > 0);
+
+            if (array->type && array->vals[0]->type != array->type) {
+                fputs("Error: array declared as ", stderr);
+                write_type_err(array->type);
+                fputs(" contains ", stderr);
+                write_type_err(array->vals[0]->type);
+                fputs(".\n", stderr);
+                return false;
+            }
+
             for (size_t i = 0; i < array->size; i++) {
                 if (i && array->vals[i]->type != array->vals[0]->type) {
                     fputs("Error: array contains both ", stderr);
@@ -395,8 +466,9 @@ bool typeck_expr(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
                     return false;
                 }
             }
-            TODO();
+            expr->type = array_of(ctx, array->size, array->type);
         }
+
         case XPR_ASSIGN:
             auto assign = expr->assign;
             // TODO: check assignment type compatibility
@@ -405,9 +477,36 @@ bool typeck_expr(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
         case XPR_INDEX:
             auto index = expr->index;
             // TYPE
-            if (!is_numeric(index.index->type)) TODO();
+            if (!is_numeric(index.index->type)) {
+                fputs("Error: can't use non-numeric type ", stderr);
+                write_type_err(index.index->type);
+                fputs("to index an array.\n", stderr);
+                return false;
+            }
+
             // ERROR MESSAGE
-            if (index.array->type->tag != TYPE_ARRAY) TODO();
+            switch (index.array->type->tag) {
+                case TYPE_POINTER:
+                    if (!(expr->type = index.array->type->pointee_type)) {
+                        fputs(
+                            "Error: can't index a dynamic pointer.\n", stderr
+                        );
+                        return false;
+                    }
+                    return true;
+
+                case TYPE_ARRAY:
+                    expr->type = index.array->type->array.member_type;
+                    return true;
+
+                [[clang::unlikely]] default: {
+                    fputs("Error: can't index ", stderr);
+                    write_type_err(index.array->type);
+                    fputs(".\n", stderr);
+                    return false;
+                }
+            }
+
             expr->type = index.array->type->array.member_type;
             return true;
     }
@@ -424,40 +523,21 @@ static bool typeck_cond(const UCLExpression *expr) {
     return true;
 }
 
-bool typeck_stmt(TypeckCtx ctx, Statement *_Nonnull stmt) {
+bool typeck_stmt(TypeckCtx, Statement *_Nonnull stmt) {
     switch (stmt->tag) {
         case STMT_UNPARSABLE: return false;
 
-        case STMT_BLOCK: {
-            bool ret = true;
-            for (size_t i = 0; i < stmt->block->size; i++) {
-                if (!typeck_stmt(ctx, &stmt->block->statements[i])) ret = false;
-            }
-            return ret;
-        }
+        case STMT_BLOCK: return true;
 
-        case STMT_IF: {
-            UCLExpression *_Nonnull cond = stmt->conditional.cond;
-            if (typeck_cond(cond)) return false;
-            if (!typeck_stmt(ctx, stmt->conditional.if_body)) return false;
-            if (stmt->conditional.else_body) {
-                return typeck_stmt(ctx, stmt->conditional.else_body);
-            }
-            return true;
-        }
+        case STMT_IF: return typeck_cond(stmt->conditional.cond);
 
-        case STMT_WHILE: TODO();
-        case STMT_FOREACH: {
-
-        }
+        case STMT_WHILE: return typeck_cond(stmt->while_loop.cond);
+        // currently type checked within parser to properly infer variable type
+        case STMT_FOREACH: return true;
         case STMT_RETURN: TODO();
-        case STMT_EXPR:
-            assert(stmt->expr->type != NULL);
-            return true;
+        case STMT_EXPR: assert(stmt->expr->type != NULL); return true;
         case STMT_BREAK: TODO();
-        case STMT_VAR_DEC:
-            assert(stmt->declaration.type != NULL);
-            return true;
+        case STMT_VAR_DEC: assert(stmt->declaration.type != NULL); return true;
         case STMT_FUN_DEC: TODO();
         case STMT_EXTERN_VAR: TODO();
         case STMT_EXTERN_FUN: TODO();

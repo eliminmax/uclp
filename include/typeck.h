@@ -34,6 +34,10 @@ typedef struct {
     AllocGroup ag;
 } TypeckCtx;
 
+UCLType *_Nonnull array_of(
+    TypeckCtx ctx, size_t len, UCLType *_Nonnull mem_type
+);
+
 bool typeck_expr(TypeckCtx ctx, UCLExpression *_Nonnull expr);
 bool typeck_stmt(TypeckCtx ctx, Statement *_Nonnull stmt);
 

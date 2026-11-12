@@ -35,7 +35,8 @@
 
 #define USE [[clang::use_handle("parser")]]
 // Approximation of digits in SIZE_MAX; see https://stackoverflow.com/a/43788824
-constexpr size_t MAX_SIZE_DIGITS = ((sizeof(size_t) * CHAR_BIT) * 28 / 93 + 2);
+static constexpr size_t MAX_SIZE_DIGITS =
+    ((sizeof(size_t) * CHAR_BIT) * 28 / 93 + 2);
 
 typedef UCLExpression *_Nullable (*PrefixFn)(USE Parser);
 typedef UCLExpression *_Nullable (*InfixFn)(
@@ -477,31 +478,7 @@ typedef struct {
 } ParseRule;
 
 #define expression(p) subexpr(p, XPREC_ASSIGN)
-static UCLExpression *subexpr(USE Parser, enum expr_prec);
-
-static UCLType *_Nonnull array_of(
-    USE Parser p, size_t len, UCLType *_Nonnull mem_type
-) {
-    CharBuffer name = {};
-    write_type(mem_type, &name);
-    char numbuf[MAX_SIZE_DIGITS + 3];
-    size_t sz = sprintf(numbuf, "[%zu]", len);
-    append_chars(&name, sz, (uchar *)numbuf);
-    String key = as_string(name);
-    UCLType *type = ht_lookup(p->types, key);
-    if (type) {
-        free(name.mem);
-    } else {
-        type = checked_malloc(sizeof(UCLType));
-        type->tag = TYPE_ARRAY;
-        type->array.len = len;
-        type->array.member_type = mem_type;
-        ht_set(p->types, key, type);
-        group_claim(p->ag, name.mem);
-        group_claim(p->ag, type);
-    }
-    return type;
-}
+static UCLExpression *_Nullable subexpr(USE Parser, enum expr_prec);
 
 static UCLExpression *_Nullable array(USE Parser p) {
     size_t start = p->next_tok_i - 1;
@@ -594,8 +571,9 @@ static UCLExpression *_Nonnull literal(USE Parser p) {
         case TOKEN_STR: {
             String lexeme = current(p).lexeme;
             size_t len = lexeme.len - 2;
-            expr->type =
-                array_of(p, len, ht_lookup(p->types, (String){2, "i8"}));
+            expr->type = array_of(
+                typeck_ctx(p), len, ht_lookup(p->types, (String){2, "i8"})
+            );
             expr->literal.tag = LIT_STR;
             expr->literal.string = (String){len, &lexeme.text[1]};
             return expr;
@@ -634,6 +612,7 @@ static UCLExpression *_Nullable grouping(USE Parser p) {
     size_t start = p->next_tok_i - 1;
     advance(p);
     UCLExpression *grouped = expression(p);
+    if (!grouped) return NULL;
     if (!consume(
             p, TOKEN_R_PAREN, "Expected ')' after parenthesized expression"
         )) {
@@ -676,7 +655,9 @@ static UCLExpression *_Nullable unary(USE Parser p) {
     expr->tag = XPR_UNARY;
     expr->unary.op = current(p).type;
     advance(p);
-    expr->unary.operand = subexpr(p, XPREC_UNARY);
+    if (!(expr->unary.operand = subexpr(p, XPREC_UNARY))) [[clang::unlikely]] {
+        return NULL;
+    }
     expr->span.start = start;
     expr->span.end = p->next_tok_i;
     return expr;
@@ -694,7 +675,10 @@ static UCLExpression *_Nullable typecast(USE Parser p) {
     expr->tag = XPR_TYPECAST;
     expr->type = type;
     advance(p);
-    expr->type_cast.inner = subexpr(p, XPREC_UNARY);
+    if (!(expr->type_cast.inner = subexpr(p, XPREC_UNARY)))
+        [[clang::unlikely]] {
+        return NULL;
+    }
     expr->span.start = start;
     expr->span.end = p->next_tok_i;
     return expr;
@@ -707,7 +691,7 @@ static UCLExpression *_Nullable index_(
     UCLExpression *new_expr = alloc_expr(p);
     new_expr->tag = XPR_INDEX;
     new_expr->index.array = e;
-    new_expr->index.index = expression(p);
+    if (!(new_expr->index.index = expression(p))) return NULL;
     new_expr->span.start = e->span.start;
     if (!consume(p, TOKEN_R_SQUARE, "expect ']' after array index.")) {
         return NULL;
@@ -731,7 +715,7 @@ static UCLExpression *_Nullable call(USE Parser p, UCLExpression *_Nonnull e) {
                 error_at_token(
                     p, p->next_tok_i - 1, "Too many arguments - maximum is 255."
                 );
-            ARGS_BUF[nargs++] = expression(p);
+            if (!(ARGS_BUF[nargs++] = expression(p))) return NULL;
         } while (advance_on(p, TOKEN_COMMA));
         if (!consume(p, TOKEN_R_PAREN, "Expect ')' after function arguments."))
             return NULL;
@@ -763,6 +747,7 @@ static UCLExpression *_Nullable binary(
     enum expr_prec prec = get_rule(op).precedence;
     advance(p);
     UCLExpression *rhs = subexpr(p, prec);
+    if (!rhs) { return NULL; }
     new_expr->binary.op = op;
     new_expr->tag = XPR_BINARY;
 
@@ -782,6 +767,7 @@ static UCLExpression *_Nullable assign(
     new_expr->assign.op = current(p).type;
     new_expr->assign.place = e;
     UCLExpression *_Nonnull value = new_expr->assign.value = expression(p);
+    if (value == NULL) return NULL;
     new_expr->span.start = e->span.start;
     new_expr->span.end = value->span.end;
 
@@ -884,7 +870,7 @@ static const ParseRule XPR_RULES[TOKEN_EOF + 1] = {
 }
 
 // parse a subexpression using the XPR_RULES Pratt parsing table
-static UCLExpression *subexpr(USE Parser p, enum expr_prec prec) {
+static UCLExpression *_Nullable subexpr(USE Parser p, enum expr_prec prec) {
     PrefixFn pref;
     if (!(pref = XPR_RULES[current(p).type].prefix)) {
         error_at_token(
@@ -897,12 +883,20 @@ static UCLExpression *subexpr(USE Parser p, enum expr_prec prec) {
     }
 
     UCLExpression *a = pref(p);
-    if (!(a && typeck_expr(typeck_ctx(p), a))) return NULL;
+    if (!(a)) return NULL;
+    if (!typeck_expr(typeck_ctx(p), a)) {
+        error_at_token(p, p->next_tok_i, "Type error");
+        return NULL;
+    }
 
     while (a && prec <= XPR_RULES[peek(p).type].precedence) {
         InfixFn infix = XPR_RULES[advance(p).type].infix;
         a = infix(p, a);
-        if (!(a && typeck_expr(typeck_ctx(p), a))) return NULL;
+        if (!(a)) return NULL;
+        if (!typeck_expr(typeck_ctx(p), a)) {
+            error_at_token(p, a->span.end, "Type error");
+            return NULL;
+        }
     }
     return a;
 }
@@ -1121,13 +1115,13 @@ end:
 }
 
 static Statement expr_stmt(USE Parser p) {
-    UCLExpression *expr = expression(p);
     Statement stmt = {.tag = STMT_EXPR};
+    UCLExpression *expr = expression(p);
     if (expr) {
         stmt = (Statement){
             .tag = STMT_EXPR,
             .expr = expr,
-            .span.start = expr->span.start,
+            .span = expr->span,
         };
     } else {
         stmt = (Statement){.tag = STMT_UNPARSABLE};
@@ -1176,8 +1170,8 @@ static Statement foreach_stmt(USE Parser p, String *_Nullable label) {
     advance(p);
     size_t iterable_start = p->next_tok_i;
     UCLExpression *array = expression(p);
-    if (!consume(p, TOKEN_R_PAREN, "Expect ')' after iterable ")) goto err;
     if (!array) goto err;
+    if (!consume(p, TOKEN_R_PAREN, "Expect ')' after iterable ")) goto err;
 
     // type check here in order to be able to determine the type of the
     // iteration variable name
