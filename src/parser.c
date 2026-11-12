@@ -47,6 +47,13 @@ struct var_scope {
     HashTable vars;
 };
 
+// Metadata about a variable declaration
+struct declaration {
+    UCLType *_Nonnull type;
+    // used for error reporting when shadowing within the same scope
+    size_t line;
+};
+
 struct parser {
     Scanner scanner;
     AllocGroup ag;
@@ -58,7 +65,7 @@ struct parser {
         size_t cap;
         void **ptrs;
     } build_allocs;
-    struct var_scope current_vars;
+    struct var_scope *current_vars;
     size_t ntokens;
     size_t token_cap;
     size_t next_tok_i;
@@ -86,12 +93,18 @@ static void *_Nonnull tracked_alloc(USE Parser p, size_t sz) {
     return expr;
 }
 
+[[gnu::always_inline, gnu::artificial]] static inline TypeckCtx typeck_ctx(
+    USE Parser p
+) {
+    return (TypeckCtx){.ag = p->ag, .types = p->types};
+}
+
 [[gnu::cold, gnu::format(__printf__, 3, 4)]]
-static void error_at(USE Parser p, ssize_t offset, const char *fmt, ...) {
-    REQUIRE(offset >= 0 || (size_t)(-offset) < p->next_tok_i);
+static void error_at_token(USE Parser p, size_t index, const char *fmt, ...) {
+    REQUIRE(index < p->ntokens);
     if (p->panicking) return;
     p->panicking = true;
-    Token t = p->tokens[p->next_tok_i - 1 + offset];
+    Token t = p->tokens[index];
 
     if (t.type == TOKEN_UNPARSEABLE) return;
     va_list fmt_args;
@@ -110,11 +123,26 @@ static void error_at(USE Parser p, ssize_t offset, const char *fmt, ...) {
     va_end(fmt_args);
 }
 
+static void push_scope(USE Parser p) {
+    struct var_scope *new_scope = checked_malloc(sizeof(*new_scope));
+    *new_scope =
+        (struct var_scope){.outer = p->current_vars, .vars = ht_create()};
+    p->current_vars = new_scope;
+}
+
+static void pop_scope(USE Parser p) {
+    REQUIRE(p->current_vars->outer != NULL);
+    struct var_scope *to_pop = p->current_vars;
+    ht_cleanup(to_pop->vars, free);
+    p->current_vars = to_pop->outer;
+    free(to_pop);
+}
+
 UCLType *_Nullable type_of_binding(
     USE Parser p, struct var_scope *_Nonnull scope, const String *ident
 ) {
-    UCLType *type;
-    if ((type = ht_lookup(scope->vars, *ident))) { return type; }
+    UCLType **type;
+    if ((type = ht_lookup(scope->vars, *ident))) { return *type; }
     if (scope->outer) return type_of_binding(p, scope->outer, ident);
     return NULL;
 }
@@ -187,10 +215,10 @@ static uintmax_t number_at(USE Parser p, int offset, int fallback) {
 
 too_large:
     if (t.lexeme.len > 0x1000) {
-        error_at(p, offset, "too large: '%4093s...'", t.lexeme.text);
+        error_at_token(p, offset, "too large: '%4093s...'", t.lexeme.text);
         return -1;
     } else {
-        error_at(
+        error_at_token(
             p, offset, "too large: '%.*s'", (int)t.lexeme.len, t.lexeme.text
         );
         return -1;
@@ -247,7 +275,8 @@ Parser parser(String source) {
     StringPool idents = new_pool(ag);
     HashTable types = ht_create();
     Scanner scanner = start_scanner(source, idents);
-    struct var_scope current_vars = {.vars = ht_create(), .outer = NULL};
+    struct var_scope *current_vars = checked_malloc(sizeof(struct var_scope));
+    *current_vars = (struct var_scope){.vars = ht_create(), .outer = NULL};
 
     // default initialization rules initialize all unspecified fields if
     // designated initializer syntax is used
@@ -299,7 +328,7 @@ struct [[deprecated]] consume_result {
 [[nodiscard, gnu::format_matches(__printf__, 3, "")]]
 static bool consume(USE Parser p, enum token_type ty, const char *msg) {
     if (advance_on(p, ty)) [[clang::likely]] { return true; }
-    error_at(p, 1, msg);
+    error_at_token(p, p->next_tok_i, msg);
     return false;
 }
 
@@ -328,7 +357,9 @@ static UCLType *read_type(USE Parser p) {
             }
             break;
         }
-        default: error_at(p, 0, "Expected type"); return NULL;
+        default:
+            error_at_token(p, p->next_tok_i - 1, "Expected type");
+            return NULL;
     }
 
     write_type(type, &name_buf);
@@ -364,10 +395,18 @@ static UCLType *read_type(USE Parser p) {
 
                 if (tok.type >= TOKEN_INT_BIN && tok.type <= TOKEN_INT_HEX_64) {
                     if ((tok.type - TOKEN_INT_BIN) % 5) {
-                        error_at(p, 0, "Array size can't have a size suffix");
+                        error_at_token(
+                            p,
+                            p->next_tok_i - 1,
+                            "Array size can't have a size suffix"
+                        );
                     }
                 } else {
-                    error_at(p, 0, "Array size must be numeric literal");
+                    error_at_token(
+                        p,
+                        p->next_tok_i - 1,
+                        "Array size must be numeric literal"
+                    );
                 }
                 if (new_alloc) {
                     free(type);
@@ -381,7 +420,9 @@ static UCLType *read_type(USE Parser p) {
                 free(type);
                 new_alloc = false;
             }
-            error_at(p, 0, "Expect ']' after array size.");
+            error_at_token(
+                p, p->next_tok_i - 1, "Expect ']' after array size."
+            );
             return NULL;
         }
 
@@ -465,7 +506,7 @@ static UCLType *_Nonnull array_of(
 static UCLExpression *_Nullable array(USE Parser p) {
     size_t start = p->next_tok_i - 1;
     if (advance(p).type == TOKEN_R_SQUARE) {
-        error_at(p, 0, "Empty arrays are not supported");
+        error_at_token(p, p->next_tok_i - 1, "Empty arrays are not supported");
         return NULL;
     }
 
@@ -611,12 +652,14 @@ static UCLExpression *_Nullable ident(USE Parser p) {
     UCLExpression *expr = alloc_expr(p);
     expr->tag = XPR_VAR;
     expr->var_name = intern(p->idents, tok.lexeme);
-    expr->type = type_of_binding(p, &p->current_vars, expr->var_name);
+    expr->type = type_of_binding(p, p->current_vars, expr->var_name);
     if (expr->type == NULL) {
         CharBuffer buf = {};
-        append_chars(&buf, expr->var_name->len, (const uchar *)expr->var_name->text);
+        append_chars(
+            &buf, expr->var_name->len, (const uchar *)expr->var_name->text
+        );
         append_chars(&buf, 1, u8"");
-        error_at(p, 0, "Unknown variable '%s'", buf.mem);
+        error_at_token(p, p->next_tok_i - 1, "Unknown variable '%s'", buf.mem);
         free(buf.mem);
         return NULL;
     }
@@ -685,7 +728,9 @@ static UCLExpression *_Nullable call(USE Parser p, UCLExpression *_Nonnull e) {
     if (!advance_on(p, TOKEN_R_PAREN)) {
         do {
             if (nargs == UINT8_MAX)
-                error_at(p, 0, "Too many arguments - maximum is 255.");
+                error_at_token(
+                    p, p->next_tok_i - 1, "Too many arguments - maximum is 255."
+                );
             ARGS_BUF[nargs++] = expression(p);
         } while (advance_on(p, TOKEN_COMMA));
         if (!consume(p, TOKEN_R_PAREN, "Expect ')' after function arguments."))
@@ -842,19 +887,23 @@ static const ParseRule XPR_RULES[TOKEN_EOF + 1] = {
 static UCLExpression *subexpr(USE Parser p, enum expr_prec prec) {
     PrefixFn pref;
     if (!(pref = XPR_RULES[current(p).type].prefix)) {
-        error_at(p, 0, "Expect expression (t: %d).", (int)current(p).type);
+        error_at_token(
+            p,
+            p->next_tok_i - 1,
+            "Expect expression (t: %d).",
+            (int)current(p).type
+        );
         return NULL;
     }
 
     UCLExpression *a = pref(p);
+    if (!(a && typeck_expr(typeck_ctx(p), a))) return NULL;
 
-    while (prec <= XPR_RULES[peek(p).type].precedence) {
+    while (a && prec <= XPR_RULES[peek(p).type].precedence) {
         InfixFn infix = XPR_RULES[advance(p).type].infix;
         a = infix(p, a);
+        if (!(a && typeck_expr(typeck_ctx(p), a))) return NULL;
     }
-
-    // typeck_expr((TypeckCtx){.ag = p->ag, .types = p->types}, a);
-
     return a;
 }
 
@@ -864,8 +913,40 @@ static int ident_printf_len(const String *s) {
     return s->len;
 }
 
+bool declare_variable(
+    USE Parser p, const String *_Nonnull id, UCLType *_Nonnull type
+) {
+    struct var_scope *scope = p->current_vars;
+    struct declaration *_Nonnull dec_data = checked_malloc(sizeof(*dec_data));
+    *dec_data = (struct declaration){.line = current(p).line, .type = type};
+
+    struct declaration *_Nullable old;
+
+    if ((old = ht_set(scope->vars, *id, dec_data))) {
+        CharBuffer name = {}, type = {};
+        write_type(old->type, &type);
+        append_chars(&name, id->len, (const uchar *)id->text);
+        append_chars(&name, 1, u8"");
+        append_chars(&type, 1, u8"");
+        error_at_token(
+            p,
+            p->next_tok_i - 1,
+            "Redeclaration of %s (previously declared as %s on line %zd)",
+            name.mem,
+            type.mem,
+            old->line
+        );
+        free(name.mem);
+        free(type.mem);
+        free(old);
+        return false;
+    }
+
+    return true;
+}
+
 static Statement var_decl(USE Parser p, Placement plcmnt) {
-    size_t start = p->next_tok_i;
+    size_t start = p->next_tok_i - 1;
     Statement stmt = {.tag = STMT_VAR_DEC};
     stmt.span.start = start;
     if (!consume(p, TOKEN_IDENT, "Expect variable name")) {
@@ -902,25 +983,39 @@ static Statement var_decl(USE Parser p, Placement plcmnt) {
 
                 // NULL terminate the message
                 append_chars(&buf, 1, u8"");
-                error_at(p, 0, "Type mismatch: declared a %s", buf.mem);
+                error_at_token(
+                    p,
+                    p->next_tok_i - 1,
+                    "Type mismatch: declared a %s",
+                    buf.mem
+                );
                 free(buf.mem);
             }
-        } else if ((type = stmt.declaration.value->type) != NULL) {
+        } else {
             type_known = true;
         }
+        type = stmt.declaration.value->type;
     } else {
         stmt.declaration.value = NULL;
     }
 
-    if (!type_known) {
+    if (type_known) {
+        stmt.declaration.type = type;
+        auto ident = intern(p->idents, *stmt.declaration.ident);
+        if (!declare_variable(p, ident, type)) {
+            stmt.tag = STMT_UNPARSABLE;
+            goto end;
+        }
+    } else {
         int offset;
         if (ckd_sub(&offset, p->next_tok_i, start)) [[clang::unlikely]] {
             offset = 1;
         }
-        error_at(
+        error_at_token(
             p,
-            offset,
-            "Must provide either an explicit type and/or a value for %.*s",
+            p->next_tok_i,
+            "Unable to resolve type of declaration, an explicit type and/or "
+            "a value must be provided for %.*s",
             ident_printf_len(stmt.declaration.ident),
             stmt.declaration.ident->text
         );
@@ -935,6 +1030,7 @@ end:
 }
 
 static Statement block_stmt(USE Parser p) {
+    push_scope(p);
     size_t cap = 8;
     size_t count = 0;
     size_t alloc_index = p->build_allocs.count;
@@ -954,9 +1050,14 @@ static Statement block_stmt(USE Parser p) {
         ((Statement *)BODY)[count++] = get_statement(p);
     }
 
+    pop_scope(p);
+
     if (!advance_on(p, TOKEN_R_CURLY)) {
-        error_at(
-            p, 0, "Unclosed block (started on line %zu)", p->tokens[start].line
+        error_at_token(
+            p,
+            p->next_tok_i,
+            "Unclosed block (started on line %zu)",
+            p->tokens[start].line
         );
     }
     struct block *block = ALLOCATE(p, struct block);
@@ -1073,16 +1174,32 @@ static Statement foreach_stmt(USE Parser p, String *_Nullable label) {
 
     if (!consume(p, TOKEN_IN, "Expect 'in' after iteration name")) goto err;
     advance(p);
+    size_t iterable_start = p->next_tok_i;
     UCLExpression *array = expression(p);
     if (!consume(p, TOKEN_R_PAREN, "Expect ')' after iterable ")) goto err;
     if (!array) goto err;
 
-#ifdef TYPE_CHECKING
-    TODO();
-#endif
+    // type check here in order to be able to determine the type of the
+    // iteration variable name
+    if (array->type->tag != TYPE_ARRAY) {
+        CharBuffer b = {};
+        write_type(array->type, &b);
+        append_chars(&b, 1, u8"");
+        error_at_token(
+            p,
+            iterable_start,
+            "Foreach loops require arrays, but got a %s",
+            b.mem
+        );
+        free(b.mem);
+        goto err;
+    }
 
+    push_scope(p);
     Statement *body = ALLOCATE(p, Statement);
     *body = get_statement(p);
+    pop_scope(p);
+
     if (body->tag == STMT_UNPARSABLE) goto err;
 
     return (Statement){
@@ -1145,7 +1262,11 @@ Statement get_statement(USE Parser p) {
                     s = while_stmt(p, label);
                     break;
                 } else {
-                    error_at(p, -1, "Labels are only supported on loops.");
+                    error_at_token(
+                        p,
+                        p->next_tok_i - 2,
+                        "Labels are only supported on loops."
+                    );
                 }
             } else {
                 [[fallthrough]];
@@ -1166,9 +1287,7 @@ Statement get_statement(USE Parser p) {
             group_claim(p->ag, p->build_allocs.ptrs[--p->build_allocs.count]);
         }
 
-#ifdef TYPE_CHECKING
-        typeck_stmt((TypeckCtx){.ag = p->ag, .types = p->types}, &s);
-#endif
+        typeck_stmt(typeck_ctx(p), &s);
     }
 
     return s;
@@ -1179,10 +1298,12 @@ void free_parser([[clang::release_handle("parser")]] Parser p) {
         free(p->build_allocs.ptrs[i]);
     }
 
-    struct var_scope *scope = &p->current_vars;
+    struct var_scope *scope = p->current_vars;
     while (scope) {
-        ht_cleanup(scope->vars, NULL);
-        scope = scope->outer;
+        ht_cleanup(scope->vars, free);
+        struct var_scope *_Nullable outer = scope->outer;
+        free(scope);
+        scope = outer;
     }
     free_scanner(p->scanner);
     free_pool(p->idents);
@@ -1220,7 +1341,9 @@ static void dbg_expr_inner(
     write_indent(buf, indent);
     FIXED("<\"");
     append_chars(buf, end - start, (const uchar *)start);
-    FIXED("\">:\n");
+    FIXED("\"> (");
+    write_type(expr->type, buf);
+    FIXED("):\n");
     write_indent(buf, indent);
     FIXED(" | ");
 

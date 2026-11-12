@@ -35,7 +35,6 @@ typedef struct expression {
         XPR_ASSIGN,
         XPR_INDEX,
     );
-    bool typechecked;
 
     union {
         struct unary_expression {
@@ -123,7 +122,7 @@ typedef struct statement {
         struct {
             String *_Nonnull ident;
             struct expression *_Nullable value;
-            UCLType *_Nullable type;
+            UCLType *_Nonnull type;
             Placement placement;
         } declaration;
 

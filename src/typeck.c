@@ -159,7 +159,6 @@ static bool ensure_numeric(
 static bool typeck_unary(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
     REQUIRE(expr->tag == XPR_UNARY);
     struct unary_expression *unary = &expr->unary;
-    typeck_expr(ctx, expr->unary.operand);
     REQUIRE(unary->operand->type != NULL);
     UCLType *_Nonnull inner_type = unary->operand->type;
     switch (unary->op) {
@@ -317,11 +316,7 @@ static enum ucl_type_tag bin_larger_numeric(
 
 static bool typeck_bin(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
     REQUIRE(expr->tag == XPR_BINARY);
-
-    if (!typeck_expr(ctx, expr->binary.lhs)) return false;
     REQUIRE(expr->binary.lhs->type != nullptr);
-
-    if (!typeck_expr(ctx, expr->binary.rhs)) return false;
     REQUIRE(expr->binary.rhs->type != nullptr);
 
     UCLType *_Nonnull types[2] = {
@@ -367,25 +362,23 @@ static bool typeck_bin(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
 }
 
 bool typeck_expr(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
-    if (expr->typechecked) return true;
 
     switch (expr->tag) {
         case XPR_VAR: // handled by type_of_binding in parser
             [[fallthrough]];
         case XPR_LITERAL:
             REQUIRE(expr->type != NULL);
-            return expr->typechecked = true;
-        case XPR_UNARY: return expr->typechecked = typeck_unary(ctx, expr);
-        case XPR_BINARY: return expr->typechecked = typeck_bin(ctx, expr);
+            return true;
+        case XPR_UNARY: return typeck_unary(ctx, expr);
+        case XPR_BINARY: return typeck_bin(ctx, expr);
         case XPR_FUNC_CALL: TODO();
         case XPR_GROUP:
-            if (!typeck_expr(ctx, expr->grouped)) return false;
+            REQUIRE(expr->grouped->type != NULL);
             expr->type = expr->grouped->type;
-            return expr->typechecked = true;
+            return true;
         case XPR_TYPECAST: {
             REQUIRE(expr->type != NULL);
 
-            if (!typeck_expr(ctx, expr->type_cast.inner)) return false;
             // TODO: Check cast compatibility
             return true;
         }
@@ -393,7 +386,6 @@ bool typeck_expr(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
             auto array = expr->array;
             REQUIRE(array->type == NULL && expr->type == NULL);
             for (size_t i = 0; i < array->size; i++) {
-                if (!typeck_expr(ctx, array->vals[i])) return false;
                 if (i && array->vals[i]->type != array->vals[0]->type) {
                     fputs("Error: array contains both ", stderr);
                     write_type_err(array->vals[0]->type);
@@ -407,12 +399,17 @@ bool typeck_expr(TypeckCtx ctx, UCLExpression *_Nonnull expr) {
         }
         case XPR_ASSIGN:
             auto assign = expr->assign;
-            typeck_expr(ctx, assign.place);
-            typeck_expr(ctx, assign.value);
             // TODO: check assignment type compatibility
             expr->type = assign.place->type;
-            return expr->typechecked = true;
-        case XPR_INDEX: TODO();
+            return true;
+        case XPR_INDEX:
+            auto index = expr->index;
+            // TYPE
+            if (!is_numeric(index.index->type)) TODO();
+            // ERROR MESSAGE
+            if (index.array->type->tag != TYPE_ARRAY) TODO();
+            expr->type = index.array->type->array.member_type;
+            return true;
     }
 }
 
@@ -441,7 +438,7 @@ bool typeck_stmt(TypeckCtx ctx, Statement *_Nonnull stmt) {
 
         case STMT_IF: {
             UCLExpression *_Nonnull cond = stmt->conditional.cond;
-            if (!(typeck_expr(ctx, cond) && typeck_cond(cond))) return false;
+            if (typeck_cond(cond)) return false;
             if (!typeck_stmt(ctx, stmt->conditional.if_body)) return false;
             if (stmt->conditional.else_body) {
                 return typeck_stmt(ctx, stmt->conditional.else_body);
@@ -450,11 +447,17 @@ bool typeck_stmt(TypeckCtx ctx, Statement *_Nonnull stmt) {
         }
 
         case STMT_WHILE: TODO();
-        case STMT_FOREACH: TODO();
+        case STMT_FOREACH: {
+
+        }
         case STMT_RETURN: TODO();
-        case STMT_EXPR: TODO();
+        case STMT_EXPR:
+            assert(stmt->expr->type != NULL);
+            return true;
         case STMT_BREAK: TODO();
-        case STMT_VAR_DEC: TODO();
+        case STMT_VAR_DEC:
+            assert(stmt->declaration.type != NULL);
+            return true;
         case STMT_FUN_DEC: TODO();
         case STMT_EXTERN_VAR: TODO();
         case STMT_EXTERN_FUN: TODO();
