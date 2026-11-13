@@ -15,15 +15,36 @@ endif
 
 incdir = include_directories('include')
 
-mem_handlers = ['src/mem/arena.c', 'src/mem/checked.c', 'src/mem/dynarray.c']
-all_sources = [
-  'src/main.c', 'src/hash.c', 'src/table.c', 'src/string_manager.c',
-  'src/colorize.c', 'src/scanner.c', mem_handlers, 'src/printerr.c',
-  'src/parser.c', 'src/typeck.c'
-]
+mem = ['src/mem/arena.c', 'src/mem/checked.c', 'src/mem/dynarray.c']
+
+hashtable = ['src/hashtable/hash.c', 'src/hashtable/table.c']
+
+string_pool = ['src/util/string_pool.c']
+
+parser = ['src/parser/scanner.c', 'src/parser/parser.c', 'src/parser/typeck.c']
+
+cli = ['src/cli/colorize.c', 'src/cli/printerr.c']
+
+uclpc = [ 'src/bins/uclpc.c', mem, hashtable, string_pool, parser, cli ]
+
+ucf_loader = [ 'src/bins/ucf_loader.c' ]
+
+executable('uclpc',
+  uclpc,
+  include_directories : incdir,
+  install: true,
+)
+
+executable('uclpc.ubsan',
+  uclpc,
+  c_args: ['-fsanitize=undefined,address'],
+  link_args: ['-fsanitize=undefined,address'],
+  include_directories: incdir,
+  install: false,
+)
 
 executable('ucf_loader',
-  'resources/ucf_loader.c',
+  ucf_loader,
   include_directories: incdir,
   install : true,
 )
@@ -53,18 +74,4 @@ custom_target('binfmt:ucf.conf',
   install_dir: '/etc/binfmt.d/',
   install: true,
   capture: true,
-)
-
-executable('uclpc',
-  all_sources,
-  include_directories : incdir,
-  install: true,
-)
-
-executable('uclpc.ubsan',
-  all_sources,
-  c_args: ['-fsanitize=undefined,address'],
-  link_args: ['-fsanitize=undefined,address'],
-  include_directories: incdir,
-  install: false,
 )
