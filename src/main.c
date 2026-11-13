@@ -103,7 +103,7 @@ void report_ice(
 
 void debug_print_token(Token TOK) {
 #define DEBUG_TOKENS
-#include "include/lang/tokens.h"
+#include "lang/tokens.h"
 }
 
 struct line_alloc {

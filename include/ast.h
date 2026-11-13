@@ -8,7 +8,7 @@
 #define UCLP_AST
 #include <stdint.h>
 
-#include "include/token.h"
+#include "token.h"
 #include "lang/types.h"
 #include "sized_string.h"
 #include "tagged_union.h"

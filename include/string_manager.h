@@ -8,7 +8,7 @@
 
 #include <stdint.h>
 
-#include "include/sized_string.h"
+#include "sized_string.h"
 #include "mem/arena.h"
 typedef struct string_pool *_Nonnull StringPool;
 
