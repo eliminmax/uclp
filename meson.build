@@ -18,7 +18,8 @@ incdir = include_directories('include')
 mem_handlers = ['src/mem/arena.c', 'src/mem/checked.c', 'src/mem/dynarray.c']
 all_sources = [
   'src/main.c', 'src/hash.c', 'src/table.c', 'src/string_manager.c',
-  'src/colorize.c', 'src/scanner.c', mem_handlers, 'src/printerr.c', 'src/parser.c', 'src/typeck.c'
+  'src/colorize.c', 'src/scanner.c', mem_handlers, 'src/printerr.c',
+  'src/parser.c', 'src/typeck.c'
 ]
 
 executable('ucf_loader',
@@ -28,10 +29,12 @@ executable('ucf_loader',
 )
 
 loader_path = get_option('prefix') / get_option('bindir') / 'ucf_loader'
-# This really should be done in a much simpler way, but meson custom_targets don't play
-# nice with backslashes.
+
+# This really should be done in a much simpler way, but meson custom_targets
+# don't play nice with backslashes.
 #
-# If they did, command could be `['printf', ':ucf:M::\\xf8UCF::%s::\n', loader_path]`
+# If they did, command could be
+# `['printf', ':ucf:M::\\xf8UCF::%s::\n', loader_path]`
 #
 # See https://github.com/mesonbuild/meson/issues/1564
 custom_target('binfmt:ucf.conf',
