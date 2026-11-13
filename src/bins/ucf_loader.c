@@ -24,7 +24,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#include "header_structs.h"
+#include "ucf.h"
 
 #if !__has_c_attribute(gnu::sysv_abi)
 #error "Missing required GNU function attribute sysv_abi"
